@@ -21,6 +21,9 @@ fp_simd = ["axhal/fp_simd"]
 # Interrupts
 irq = ["axhal/irq", "axruntime/irq", "axtask?/irq"]
 
+# Real time clock
+rtc = ["axhal/rtc", "axruntime/rtc"]
+
 # Memory
 alloc = ["axalloc", "axruntime/alloc"]
 alloc-tlsf = ["axalloc/tlsf"]
@@ -59,6 +62,9 @@ log-level-warn = ["axlog/log-level-warn"]
 log-level-info = ["axlog/log-level-info"]
 log-level-debug = ["axlog/log-level-debug"]
 log-level-trace = ["axlog/log-level-trace"]
+
+# musl
+musl = ["axhal/musl", "axruntime/musl", "axalloc/slab"]
 
 [dependencies]
 axruntime = { path = "../../modules/axruntime" }
