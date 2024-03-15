@@ -1769,8 +1769,7 @@ dependencies = [
 [[package]]
 name = "sbi-spec"
 version = "0.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e36312fb5ddc10d08ecdc65187402baba4ac34585cb9d1b78522ae2358d890"
+source = "git+https://github.com/Sssssaltyfish/rustsbi.git?rev=a25d448d3d770c6db493a472e3e78d949b63f523#a25d448d3d770c6db493a472e3e78d949b63f523"
 
 [[package]]
 name = "scheduler"
