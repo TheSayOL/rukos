@@ -1,9 +1,9 @@
+use alloc::vec;
 use core::mem::size_of;
 
 use ruxconfig::TASK_STACK_SIZE;
 
 const STACK_SIZE: usize = TASK_STACK_SIZE;
-static mut STACK: [u8; STACK_SIZE] = [0u8; STACK_SIZE];
 
 #[derive(Debug)]
 pub struct Stack {
@@ -16,7 +16,9 @@ pub struct Stack {
 impl Stack {
     // alloc a stack
     pub fn new() -> Self {
-        let p = unsafe { STACK.as_ptr() };
+        let mut stack = vec![0u8; STACK_SIZE];
+
+        let p = stack.as_ptr();
 
         let start = p as usize;
         let sp = start + STACK_SIZE;
