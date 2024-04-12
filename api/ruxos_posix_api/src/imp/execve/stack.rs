@@ -1,5 +1,4 @@
 use alloc::vec;
-use core::mem::size_of;
 
 use ruxconfig::TASK_STACK_SIZE;
 
@@ -16,7 +15,7 @@ pub struct Stack {
 impl Stack {
     // alloc a stack
     pub fn new() -> Self {
-        let mut stack = vec![0u8; STACK_SIZE];
+        let stack = vec![0u8; STACK_SIZE];
 
         let p = stack.as_ptr();
 
@@ -38,9 +37,9 @@ impl Stack {
         self.sp
     }
 
-    pub fn push<T>(&mut self, thing: &[T], align: usize) -> usize {
+    pub fn push<T>(&mut self, data: &[T], align: usize) -> usize {
         // move sp to right place
-        let size = thing.len() * size_of::<T>();
+        let size = core::mem::size_of_val(data);
         self.sp -= size;
         self.sp = self.align(align);
 
@@ -49,7 +48,7 @@ impl Stack {
         // write data into stack
         let pt = self.sp as *mut T;
         unsafe {
-            pt.copy_from_nonoverlapping(thing.as_ptr(), thing.len());
+            pt.copy_from_nonoverlapping(data.as_ptr(), data.len());
         }
 
         self.sp

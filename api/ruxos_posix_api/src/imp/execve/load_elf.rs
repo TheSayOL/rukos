@@ -1,19 +1,12 @@
-use crate::{ctypes::kstat, utils::char_ptr_to_str, *};
+use crate::{ctypes::kstat, *};
 use alloc::{vec, vec::Vec};
-use core::{
-    ffi::c_char,
-    ptr::{null, null_mut},
-};
+use core::{ffi::c_char, ptr::null_mut};
 
 #[derive(Debug)]
 pub struct ElfProg {
-    pub name: Vec<u8>,
-    pub path: Vec<u8>,
-    pub platform: Vec<u8>,
-    pub rand: Vec<u64>,
     pub base: usize,
     pub entry: usize,
-    pub interp_path: *const c_char,
+    pub interp_path: Vec<u8>,
     pub phent: usize,
     pub phnum: usize,
     pub phdr: usize,
@@ -23,13 +16,11 @@ impl ElfProg {
     /// read elf from `path`, and copy LOAD segments to a alloacated memory
     ///
     /// and load interp, if needed.
-    pub fn new(filepath: *const c_char) -> Self {
-        let name = char_ptr_to_str(filepath).unwrap().as_bytes().to_vec();
-        let path = name.clone();
-        debug!("sys_execve: new elf prog: {:?}", char_ptr_to_str(filepath));
+    pub fn new(filepath: &str) -> Self {
+        debug!("sys_execve: new elf prog: {filepath}");
 
         // open file
-        let fd = sys_open(filepath, ctypes::O_RDWR as i32, 0);
+        let fd = sys_open(filepath.as_ptr() as *const c_char, ctypes::O_RDWR as _, 0);
 
         // get file size
         let mut buf = ctypes::kstat {
@@ -81,22 +72,14 @@ impl ElfProg {
         let entry = file.ehdr.e_entry as usize + base;
 
         // parse interpreter
-        let mut interp_path = null::<c_char>();
+        let mut interp_path = vec![];
         for seg in file.segments().unwrap() {
             if seg.p_type == elf::abi::PT_INTERP {
-                let data = file.segment_data(&seg).unwrap();
-                interp_path = data.as_ptr() as *const c_char;
+                let data = file.segment_data(&seg).unwrap().to_vec();
+                interp_path = data;
                 break;
             }
         }
-
-        // platform
-        #[cfg(target_arch = "aarch64")]
-        let platform = b"aarch64".to_vec();
-        #[cfg(target_arch = "x86_64")]
-        let platform = b"x86_64".to_vec();
-        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-        let platform = b"unknown".to_vec();
 
         // get address of .text for debugging
         let text_section_addr = base
@@ -114,10 +97,6 @@ impl ElfProg {
         Self {
             base,
             entry,
-            name,
-            path,
-            platform,
-            rand: alloc::vec![1, 2],
             interp_path,
             phent: file.ehdr.e_phentsize as usize,
             phnum: file.ehdr.e_phnum as usize,
