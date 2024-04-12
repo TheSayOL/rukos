@@ -12,8 +12,15 @@ pub struct Stack {
 impl Stack {
     // alloc a stack
     pub fn new() -> Self {
-        let size = 0xa00000; // 10M
-        let p = sys_mmap(null_mut(), size, 0, 0, 0, 0);
+        let size = config::TASK_STACK_SIZE; // 10M
+        let prot = ctypes::PROT_READ | ctypes::PROT_WRITE;
+        let flags = ctypes::MAP_ANONYMOUS | ctypes::MAP_PRIVATE;
+        let p = sys_mmap(null_mut(), size as _, prot as _, flags as _, -1, 0);
+
+        unsafe {
+            let s = core::slice::from_raw_parts_mut(p as *mut u8, size);
+            s.fill(0);
+        }
 
         let start = p as usize;
         let sp = start + size;
