@@ -1,29 +1,29 @@
 use core::{mem::size_of, ptr::null_mut};
 
+use ruxconfig::TASK_STACK_SIZE;
+
 use crate::*;
+
+const STACK_SIZE: usize = TASK_STACK_SIZE;
+static mut STACK: [u8; STACK_SIZE] = [0u8; STACK_SIZE];
 
 #[derive(Debug)]
 pub struct Stack {
+    /// addr of the top byte of stack
     sp: usize,
+    /// addr of stack start
     start: usize,
+    /// stack start plus stack size
     end: usize,
 }
 
 impl Stack {
     // alloc a stack
     pub fn new() -> Self {
-        let size = config::TASK_STACK_SIZE; // 10M
-        let prot = ctypes::PROT_READ | ctypes::PROT_WRITE;
-        let flags = ctypes::MAP_ANONYMOUS | ctypes::MAP_PRIVATE;
-        let p = sys_mmap(null_mut(), size as _, prot as _, flags as _, -1, 0);
-
-        unsafe {
-            let s = core::slice::from_raw_parts_mut(p as *mut u8, size);
-            s.fill(0);
-        }
+        let p = unsafe { STACK.as_ptr() };
 
         let start = p as usize;
-        let sp = start + size;
+        let sp = start + STACK_SIZE;
         let end = sp;
 
         Self { sp, start, end }
@@ -34,29 +34,18 @@ impl Stack {
         self.sp
     }
 
-    pub fn push<T: Copy>(&mut self, thing: alloc::vec::Vec<T>, align: usize) -> usize {
+    pub fn push<T>(&mut self, thing: &[T], align: usize) -> usize {
+        // move sp to right place
         let size = thing.len() * size_of::<T>();
         self.sp -= size;
-        self.sp = self.align(align); // align 16B
+        self.sp = self.align(align);
 
-        if self.sp < self.start {
-            panic!("stack overflow");
-        }
-
+        // write data into stack
         let mut pt = self.sp as *mut T;
         unsafe {
-            for t in thing {
-                *pt = t;
-                pt = pt.add(1);
-            }
+            pt.copy_from_nonoverlapping(thing.as_ptr(), thing.len());
         }
 
         self.sp
-    }
-}
-
-impl Drop for Stack {
-    fn drop(&mut self) {
-        sys_munmap(self.start as *mut _, self.end - self.start);
     }
 }
