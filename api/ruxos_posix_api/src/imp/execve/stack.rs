@@ -1,8 +1,6 @@
-use core::{mem::size_of, ptr::null_mut};
+use core::mem::size_of;
 
 use ruxconfig::TASK_STACK_SIZE;
-
-use crate::*;
 
 const STACK_SIZE: usize = TASK_STACK_SIZE;
 static mut STACK: [u8; STACK_SIZE] = [0u8; STACK_SIZE];
@@ -13,8 +11,6 @@ pub struct Stack {
     sp: usize,
     /// addr of stack start
     start: usize,
-    /// stack start plus stack size
-    end: usize,
 }
 
 impl Stack {
@@ -24,9 +20,15 @@ impl Stack {
 
         let start = p as usize;
         let sp = start + STACK_SIZE;
-        let end = sp;
 
-        Self { sp, start, end }
+        Self { sp, start }
+    }
+
+    /// panic if overflow
+    fn panic_if_of(&self) {
+        if self.sp < self.start {
+            panic!("sys_execve: stack overflow");
+        }
     }
 
     pub fn align(&mut self, align: usize) -> usize {
@@ -40,8 +42,10 @@ impl Stack {
         self.sp -= size;
         self.sp = self.align(align);
 
+        self.panic_if_of();
+
         // write data into stack
-        let mut pt = self.sp as *mut T;
+        let pt = self.sp as *mut T;
         unsafe {
             pt.copy_from_nonoverlapping(thing.as_ptr(), thing.len());
         }
