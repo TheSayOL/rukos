@@ -20,7 +20,7 @@ impl ElfProg {
         debug!("sys_execve: new elf prog: {filepath}");
 
         // open file
-        let fd = sys_open(filepath.as_ptr() as *const c_char, ctypes::O_RDWR as _, 0);
+        let fd = sys_open(filepath.as_ptr() as _, ctypes::O_RDWR as _, 0);
 
         // get file size
         let mut buf = ctypes::kstat {
