@@ -233,17 +233,20 @@ pub(crate) fn snatch_fixed_region(
     start: usize,
     len: usize,
 ) -> Option<usize> {
+    error!("enter snatch_fixed_region, vma {vma_map:#x?}, start {start:x}, len {len:x}");
     let end = start + len;
 
     // Return None if the specified address can't be used
     if start < VMA_START || end > VMA_END {
         return None;
     }
+    error!("1 snatch_fixed_region");
 
     let mut post_append: Vec<(usize, Vma)> = Vec::new(); // vma should be insert.
     let mut post_remove: Vec<usize> = Vec::new(); // vma should be removed.
 
     let mut node = vma_map.upper_bound_mut(Bound::Included(&start));
+    error!("2 snatch_fixed_region");
     while let Some(vma) = node.value_mut() {
         if vma.start_addr >= end {
             break;
@@ -264,6 +267,7 @@ pub(crate) fn snatch_fixed_region(
         }
         node.move_next();
     }
+    error!("3 snatch_fixed_region");
 
     // do action after success.
     for key in post_remove {
@@ -272,11 +276,13 @@ pub(crate) fn snatch_fixed_region(
     for (key, value) in post_append {
         vma_map.insert(key, value);
     }
+    error!("4 snatch_fixed_region");
 
     // delete the mapped and swapped page.
     release_pages_mapped(start, end);
     #[cfg(feature = "fs")]
     release_pages_swaped(start, end);
+    error!("5 snatch_fixed_region");
 
     Some(start)
 }
