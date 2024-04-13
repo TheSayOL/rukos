@@ -90,29 +90,22 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
     let mut arg_vec = vec![];
     let mut argc = 0;
 
-    let envp = envp as *const usize;
+    let mut envp = envp as *const usize;
     unsafe {
-        let mut i = 0;
-        while *envp.add(i) != 0 {
-            env_vec.push(*envp.add(i));
-            i += 1;
+        while *envp != 0 {
+            env_vec.push(*envp);
+            envp = envp.add(1);
         }
         env_vec.push(0);
     }
 
-    let argv = argv as *const usize;
+    let mut argv = argv as *const usize;
     unsafe {
-        let mut i = 0;
-        loop {
-            let p = *argv.add(i);
-            if p == 0 {
-                break;
-            }
-            arg_vec.push(p);
-            argc += 1;
-            i += 1;
+        while *argv != 0 {
+            arg_vec.push(*argv);
+            argv = argv.add(1);
         }
-
+        argc = arg_vec.len();
         arg_vec.push(0);
     }
 
