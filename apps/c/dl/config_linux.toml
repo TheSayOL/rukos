@@ -4,14 +4,7 @@ loader_app = ["y", "/bin/hello"]
 
 [os]
 name = "ruxos"
-services = [
-    "alloc",
-    "paging",
-    "musl",
-    "multitask",
-    "fs",
-    "virtio-9p",
-]
+services = ["alloc", "paging", "musl", "multitask", "fs", "virtio-9p"]
 ulib = "ruxmusl"
 develop = "y"
 
