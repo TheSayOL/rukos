@@ -1,6 +1,6 @@
 [build]
 compiler = "gcc"
-loader_app = ["y", "/hello"]
+loader_app = ["y", "/bin/hello"]
 
 [os]
 name = "ruxos"
@@ -24,4 +24,4 @@ log = "info"
 memory = "2g"
 v9p = "y"
 v9p_path = "./rootfs"
-args = "/hello"
+args = "/bin/hello"

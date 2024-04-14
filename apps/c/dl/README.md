@@ -9,7 +9,7 @@
 ```sh
 cd rootfs/
 musl-gcc libadd.c -shared -o lib/libadd.so
-musl-gcc hello.c -Llib -ladd -o hello
+musl-gcc hello.c -Llib -ladd -o bin/hello
 ```
 
 2. 将 Musl 动态链接器放入 `rootfs/lib` 下.
