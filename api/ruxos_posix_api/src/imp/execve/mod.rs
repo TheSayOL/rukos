@@ -104,8 +104,8 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
         while *argv != 0 {
             arg_vec.push(*argv);
             argv = argv.add(1);
+            argc += 1;
         }
-        argc = arg_vec.len();
         arg_vec.push(0);
     }
 
@@ -113,7 +113,7 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
     stack.push(&auxv, 16);
     stack.push(&env_vec, 8);
     stack.push(&arg_vec, 8);
-    let sp = stack.push(&[argc as usize], 8);
+    let sp = stack.push(&[argc], 8);
 
     // try run
     debug!(

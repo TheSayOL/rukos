@@ -1,6 +1,6 @@
 use crate::{ctypes::kstat, *};
 use alloc::{vec, vec::Vec};
-use core::{ffi::c_char, ptr::null_mut};
+use core::ptr::null_mut;
 
 #[derive(Debug)]
 pub struct ElfProg {
