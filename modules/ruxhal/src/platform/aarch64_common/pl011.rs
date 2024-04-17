@@ -100,10 +100,25 @@ pub fn init_early() {
     UART.inner.lock().init();
 }
 
+#[cfg(feature = "tty")]
+static mut DRIVER_INDEX: usize = 0;
+#[cfg(feature = "tty")]
+static mut DEV_INDEX: usize = 0;
+
 /// Set UART IRQ Enable
 pub fn init() {
     #[cfg(feature = "irq")]
     {
+        #[cfg(feature = "tty")]
+        {
+            let ops = line_discipline::TtyDriverOps { putchar: putchar };
+            let driver_index = line_discipline::register_driver(ops, "ttyS");
+            let dev_index = line_discipline::register_device(driver_index);
+            unsafe {
+                DRIVER_INDEX = driver_index;
+                DEV_INDEX = dev_index as _;
+            }
+        }
         crate::irq::register_handler(crate::platform::irq::UART_IRQ_NUM, irq_handler);
         crate::irq::set_enable(crate::platform::irq::UART_IRQ_NUM, true);
     }
@@ -116,8 +131,22 @@ pub fn irq_handler() {
     let is_receive_interrupt = dev.is_receive_interrupt();
     if is_receive_interrupt {
         dev.ack_interrupts();
+        #[cfg(not(feature = "tty"))]
         while let Some(c) = dev.getchar() {
             UART.buffer.lock().push(c);
+        }
+        #[cfg(feature = "tty")]
+        {
+            let mut buf = [0u8; 128];
+            let mut len = 0;
+
+            while let Some(c) = dev.getchar() {
+                buf[len] = c;
+                len += 1;
+            }
+            unsafe {
+                line_discipline::tty_receive_buf(DRIVER_INDEX, DEV_INDEX, &buf[..len]);
+            }
         }
     }
 }

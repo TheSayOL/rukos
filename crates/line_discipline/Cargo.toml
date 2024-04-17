@@ -1,0 +1,9 @@
+[package]
+name = "line_discipline"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+spin = { version = "0.9", default-features = false, features = [] }
+lazy_init = { path = "../lazy_init" }
+log = "0.4"

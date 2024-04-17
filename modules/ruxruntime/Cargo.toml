@@ -34,6 +34,8 @@ signal = []
 
 musl = ["dep:ruxfutex"]
 
+tty = ["line_discipline"]
+
 [dependencies]
 cfg-if = "1.0"
 ruxhal = { path = "../ruxhal" }
@@ -54,3 +56,5 @@ percpu = { path = "../../crates/percpu", optional = true }
 kernel_guard = { path = "../../crates/kernel_guard", optional = true }
 lazy_init = { path = "../../crates/lazy_init", optional = true }
 dtb = { path = "../../crates/dtb", optional = true }
+
+line_discipline = { path = "../../crates/line_discipline", optional = true }

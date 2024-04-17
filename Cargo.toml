@@ -20,7 +20,7 @@ members = [
     "crates/driver_net",
     "crates/driver_pci",
     "crates/driver_virtio",
-	"crates/dtb",
+    "crates/dtb",
     "crates/flatten_objects",
     "crates/handler_table",
     "crates/kernel_guard",
@@ -37,6 +37,7 @@ members = [
     "crates/spinlock",
     "crates/timer_list",
     "crates/tuple_for_each",
+    "crates/line_discipline",
 
     "modules/axalloc",
     "modules/axlog",
