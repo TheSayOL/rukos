@@ -157,8 +157,12 @@ pub unsafe extern "C" fn sys_getrandom(buf: *mut c_void, buflen: size_t, flags: 
         if buf.is_null() {
             return Err(LinuxError::EFAULT);
         }
-        if flags != 0 {
-            return Err(LinuxError::EINVAL);
+        const GRND_NONBLOCK: c_int = 1;
+        const GRND_RANDOM: c_int = 2;
+        match flags {
+            GRND_NONBLOCK => {}
+            GRND_RANDOM => {}
+            _ => return Err(LinuxError::EINVAL),
         }
         // fill the buffer 8 bytes at a time first, then fill the remaining bytes
         let buflen_mod = buflen % (core::mem::size_of::<i64>() / core::mem::size_of::<u8>());
