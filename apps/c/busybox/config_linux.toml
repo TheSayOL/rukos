@@ -1,20 +1,34 @@
 [build]
 compiler = "gcc"
-loader_app = ["y", "/bin/busybox"]
+app = "./busybox"
 
 [os]
 name = "ruxos"
-services = ["alloc", "paging", "musl", "multitask", "fs", "virtio-9p"]
+services = [
+    "alloc",
+    "paging",
+    "musl",
+    "multitask",
+    "fs",
+    "pipe",
+    "poll",
+    "rtc",
+    "virtio-9p",
+    "irq",
+    "signal",
+]
 ulib = "ruxmusl"
 develop = "y"
 
 [os.platform]
 name = "aarch64-qemu-virt"
 mode = "release"
-log = "info"
+log = "debug"
+
 
 [os.platform.qemu]
 memory = "2g"
 v9p = "y"
 v9p_path = "./rootfs"
-args = "/bin/busybox"
+args = "/bin/busybox,sh"
+qemu_log = "y"
