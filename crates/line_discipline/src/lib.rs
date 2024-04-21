@@ -12,18 +12,16 @@
 
 #![no_std]
 
-use driver::get_driver_by_index;
-use spin::RwLock;
-
 extern crate alloc;
-extern crate log;
-extern crate spin;
 
 mod buffer;
 mod driver;
 mod ldisc;
 mod tty;
 mod utils;
+
+use driver::get_driver_by_index;
+use spin::RwLock;
 
 pub use driver::{register_device, register_driver, TtyDriverOps};
 pub use tty::{get_all_device_names, get_device_by_index, get_device_by_name};
