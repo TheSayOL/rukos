@@ -1,10 +1,10 @@
 # ELF loader
 
-> 细节请看 RuxOS 手册.
+> Read the RuxOS Book for detail.
 
-## 如何运行
+## Quick Start
 
-1. 使用 Musl 编译 `rootfs/` 下的文件.
+1. Compile the C files with Musl in `rootfs/`.
 
 ```sh
 cd rootfs/
@@ -12,20 +12,20 @@ musl-gcc libadd.c -shared -o lib/libadd.so
 musl-gcc hello.c -Llib -ladd -o bin/hello
 ```
 
-2. 将 Musl 动态链接器放入 `rootfs/lib` 下.
+2. Copy the Musl dyanmic linker to `rootfs/lib`.
 
-3. 运行
+3. Run
 
-使用 `ruxgo` 运行
+Run with `ruxgo`:
 
 ```sh
-# 在 apps/c/dl 目录下
+# in apps/c/dl
 ruxgo -b && ruxgo -r
 ```
 
-使用 `make` 运行
+Run with `make`
 
 ```sh
-# 在 RuxOS 目录下.
+# in the RuxOS main directory.
 make run ARCH=aarch64 A=apps/c/dl V9P=y MUSL=y LOG=debug
 ```

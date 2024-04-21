@@ -37,7 +37,7 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
 
     // non 8B info
     stack.push(&[0u8; 32], 16);
-    let rand = rand();
+    let rand = unsafe { [sys_random(), sys_random()] };
     let p_rand = stack.push(&rand, 16);
 
     // auxv
@@ -88,7 +88,6 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
     // handle envs and args
     let mut env_vec = vec![];
     let mut arg_vec = vec![];
-    let mut argc = 0;
 
     let mut envp = envp as *const usize;
     unsafe {
@@ -104,7 +103,6 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
         while *argv != 0 {
             arg_vec.push(*argv);
             argv = argv.add(1);
-            argc += 1;
         }
         arg_vec.push(0);
     }
@@ -113,7 +111,7 @@ pub fn sys_execve(pathname: *const c_char, argv: usize, envp: usize) -> ! {
     stack.push(&auxv, 16);
     stack.push(&env_vec, 8);
     stack.push(&arg_vec, 8);
-    let sp = stack.push(&[argc], 8);
+    let sp = stack.push(&[arg_vec.len() - 1], 8); // argc
 
     // try run
     debug!(
@@ -146,11 +144,6 @@ fn set_sp_and_jmp(sp: usize, entry: usize) -> ! {
         );
     }
     unreachable!("sys_execve: unknown arch, sp 0x{sp:x}, entry 0x{entry:x}");
-}
-
-/// for AT_RANDOM
-fn rand() -> [i64; 2] {
-    unsafe { [sys_random(), sys_random()] }
 }
 
 fn platform() -> usize {

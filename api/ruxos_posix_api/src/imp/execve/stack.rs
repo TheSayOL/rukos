@@ -1,8 +1,6 @@
 use alloc::{vec, vec::Vec};
 
-use ruxconfig::TASK_STACK_SIZE;
-
-const STACK_SIZE: usize = TASK_STACK_SIZE;
+const STACK_SIZE: usize = ruxconfig::TASK_STACK_SIZE;
 
 #[derive(Debug)]
 pub struct Stack {
@@ -21,17 +19,6 @@ impl Stack {
         }
     }
 
-    /// panic if overflow
-    fn panic_if_of(&self) {
-        assert!(self.top <= self.data.len(), "sys_execve: stack overflow.");
-    }
-
-    /// move sp to align
-    pub fn align(&mut self, align: usize) -> usize {
-        self.top -= self.top % align;
-        self.top
-    }
-
     /// addr of top of stack
     pub fn sp(&self) -> usize {
         self.data.as_ptr() as usize + self.top
@@ -41,9 +28,9 @@ impl Stack {
     pub fn push<T>(&mut self, data: &[T], align: usize) -> usize {
         // move sp to right place
         self.top -= core::mem::size_of_val(data);
-        self.top = self.align(align);
+        self.top = memory_addr::align_down(self.top, align);
 
-        self.panic_if_of();
+        assert!(self.top <= self.data.len(), "sys_execve: stack overflow.");
 
         // write data into stack
         let sp = self.sp() as *mut T;
