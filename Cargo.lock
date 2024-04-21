@@ -1007,6 +1007,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "line_discipline"
+version = "0.0.1"
+dependencies = [
+ "lazy_init",
+ "log",
+ "spin 0.9.8",
+ "spinlock",
+]
+
+[[package]]
 name = "linked_list"
 version = "0.1.0"
 
@@ -1596,6 +1606,7 @@ dependencies = [
  "handler_table",
  "kernel_guard",
  "lazy_init",
+ "line_discipline",
  "log",
  "memory_addr",
  "page_table",
@@ -1700,6 +1711,7 @@ dependencies = [
  "dtb",
  "kernel_guard",
  "lazy_init",
+ "line_discipline",
  "percpu",
  "rux9p",
  "ruxconfig",
