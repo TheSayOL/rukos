@@ -29,12 +29,11 @@ const BS: u8 = b'\x08';
 const SPACE: u8 = b' ';
 
 /// starting with 27, 91
-const ARROW_PREFIX: [u8; 2] = [27, 91];
+const ARROW_PREFIX: [u8; 2] = [27, 91]; // 27: escape, 91: [
 const UP: u8 = 65;
 const DOWN: u8 = 66;
 const RIGHT: u8 = 67;
 const LEFT: u8 = 68;
-
 
 use alloc::sync::Arc;
 use spin::Mutex;
@@ -90,6 +89,9 @@ pub struct TtyLdisc {
 
     /// namely echo buffer, for the data driver sent and copy to read_buf when processing done.
     echo_buf: Mutex<EchoBuffer>,
+
+    /// tmp receive buffer
+    rec_buf: TtyBuffer,
 }
 
 impl TtyLdisc {
@@ -97,6 +99,7 @@ impl TtyLdisc {
         Self {
             read_buf: TtyBuffer::new(),
             echo_buf: Mutex::new(EchoBuffer::new()),
+            rec_buf: TtyBuffer::new(),
         }
     }
 }
@@ -133,27 +136,42 @@ impl TtyLdisc {
     /// handle characters and echo.
     /// seems in irq.
     pub fn receive_buf(&self, tty: Arc<TtyStruct>, buf: &[u8]) {
-        let mut i = 0;
-        let buf_len = buf.len();
-        while i < buf_len {
-            let ch = buf[i];
-
-            // handle arrow keys
-            if i + 2 < buf_len && buf[i] == ARROW_PREFIX[0] && buf[i + 1] == ARROW_PREFIX[1] {
-                let ch = buf[i + 2];
+        // add to receive buffer
+        for ch in buf {
+            self.rec_buf.push(*ch);
+        }
+        while self.rec_buf.len() > 0 {
+            let ch = self.rec_buf.see(0);
+            if ch == ARROW_PREFIX[0] {
+                // handle arrow char
+                if self.rec_buf.len() < 3 {
+                    // no enough len, just break
+                    break;
+                }
+                // enough len, check if arrow char or not
+                if self.rec_buf.see(1) != ARROW_PREFIX[1] {
+                    // not arrow, delete and ignore
+                    self.rec_buf.delete(0);
+                    self.rec_buf.delete(0);
+                    break;
+                }
+                // here, is arrow char, handle it
+                self.rec_buf.delete(0);
+                self.rec_buf.delete(0);
+                let ch = self.rec_buf.delete(0);
                 match ch {
                     LEFT => {
                         // if can left
                         let mut lock = self.echo_buf.lock();
                         if lock.col() > 0 {
-                            self.write(tty.clone(), &[buf[i], buf[i + 1], ch]);
+                            self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], ch]);
                             lock.col_sub_one();
                         }
                     }
                     RIGHT => {
                         let mut lock = self.echo_buf.lock();
                         if lock.col() < lock.len() {
-                            self.write(tty.clone(), &[buf[i], buf[i + 1], ch]);
+                            self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], ch]);
                             lock.col_add_one();
                         }
                     }
@@ -161,81 +179,83 @@ impl TtyLdisc {
                         // ignore
                     }
                 }
-                i += 3;
-                continue;
-            }
+            } else {
+                // handle normal char
+                match ch {
+                    CR | LF => {
+                        // always '\n'
+                        let ch = LF;
 
-            // if not arrow, handle normal keys
-            match ch {
-                CR | LF => {
-                    // always '\n'
-                    let ch = LF;
+                        // echo
+                        self.write(tty.clone(), &[ch]);
 
-                    // echo
-                    self.write(tty.clone(), &[ch]);
+                        // push ch
+                        let mut lock = self.echo_buf.lock();
+                        lock.buffer.push(ch);
 
-                    // push ch
-                    let mut lock = self.echo_buf.lock();
-                    lock.buffer.push(ch);
+                        // copy echo buffer to read buffer
+                        // FIXME: currently flush read_buf and push all data to read_buf
+                        let len = lock.buffer.len();
+                        for _ in 0..len {
+                            let ch = lock.buffer.delete(0);
+                            self.read_buf.push(ch);
+                        }
 
-                    // copy echo buffer to read buffer
-                    // FIXME: currently flush read_buf and push all data to read_buf
-                    let len = lock.buffer.len();
-                    for _ in 0..len {
-                        let ch = lock.buffer.delete(0);
-                        self.read_buf.push(ch);
+                        // col set to 0
+                        lock.col_clear();
                     }
-
-                    // col set to 0
-                    lock.col_clear();
-                }
-                BS | DEL => {
-                    let mut lock = self.echo_buf.lock();
-                    let col = lock.col();
-                    let len = lock.buffer.len();
-                    // can delete
-                    if col > 0 {
-                        if col == len {
-                            self.write(tty.clone(), &[BS, SPACE, BS]);
-                            lock.buffer.delete(col - 1);
-                            lock.col_sub_one();
-                        } else {
-                            self.write(tty.clone(), &[BS, SPACE, BS]);
-                            for i in col..len {
-                                let ch = lock.buffer.see(i);
-                                self.write(tty.clone(), &[ch]);
+                    BS | DEL => {
+                        let mut lock = self.echo_buf.lock();
+                        let col = lock.col();
+                        let len = lock.buffer.len();
+                        // can delete
+                        if col > 0 {
+                            if col == len {
+                                self.write(tty.clone(), &[BS, SPACE, BS]);
+                                lock.buffer.delete(col - 1);
+                                lock.col_sub_one();
+                            } else {
+                                self.write(tty.clone(), &[BS, SPACE, BS]);
+                                for i in col..len {
+                                    let ch = lock.buffer.see(i);
+                                    self.write(tty.clone(), &[ch]);
+                                }
+                                self.write(tty.clone(), &[SPACE]);
+                                for _ in 0..(len - col + 1) {
+                                    self.write(
+                                        tty.clone(),
+                                        &[ARROW_PREFIX[0], ARROW_PREFIX[1], LEFT],
+                                    );
+                                }
+                                lock.buffer.delete(col - 1);
+                                lock.col_sub_one();
                             }
-                            self.write(tty.clone(), &[SPACE]);
-                            for _ in 0..(len - col + 1) {
+                        }
+                    }
+                    _ => {
+                        let mut lock = self.echo_buf.lock();
+                        let col = lock.col();
+                        let len = lock.buffer.len();
+                        if col == len {
+                            self.write(tty.clone(), &[ch]);
+                            lock.buffer.push(ch);
+                            lock.col_add_one();
+                        } else {
+                            self.write(tty.clone(), &[ch]);
+                            for i in col..len {
+                                self.write(tty.clone(), &[lock.buffer.see(i)]);
+                            }
+                            for _ in 0..(len - col) {
                                 self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], LEFT]);
                             }
-                            lock.buffer.delete(col - 1);
-                            lock.col_sub_one();
+                            lock.buffer.insert(ch, col);
+                            lock.col_add_one();
                         }
                     }
                 }
-                _ => {
-                    let mut lock = self.echo_buf.lock();
-                    let col = lock.col();
-                    let len = lock.buffer.len();
-                    if col == len {
-                        self.write(tty.clone(), &[ch]);
-                        lock.buffer.push(ch);
-                        lock.col_add_one();
-                    } else {
-                        self.write(tty.clone(), &[ch]);
-                        for i in col..len {
-                            self.write(tty.clone(), &[lock.buffer.see(i)]);
-                        }
-                        for _ in 0..(len - col) {
-                            self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], LEFT]);
-                        }
-                        lock.buffer.insert(ch, col);
-                        lock.col_add_one();
-                    }
-                }
+                // pop this char
+                self.rec_buf.delete(0);
             }
-            i += 1;
         }
     }
 
