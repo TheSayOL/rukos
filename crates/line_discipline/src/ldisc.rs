@@ -20,6 +20,14 @@
 //! In effect it counts the number of threads of execution within an ldisc method
 //! (plus those about to enter and exit although this detail matters not).
 
+use alloc::sync::Arc;
+use spinlock::SpinNoIrq;
+
+use crate::{
+    buffer::{EchoBuffer, TtyBuffer},
+    tty::TtyStruct,
+};
+
 const LF: u8 = b'\n';
 const CR: u8 = b'\r';
 
@@ -28,17 +36,17 @@ const BS: u8 = b'\x08';
 
 const SPACE: u8 = b' ';
 
-/// starting with 27, 91
-const ARROW_PREFIX: [u8; 2] = [27, 91]; // 27: escape, 91: [
-const UP: u8 = 65;
-const DOWN: u8 = 66;
+/// escape
+const ESC: u8 = 27;
+/// [
+const LEFT_BRACKET: u8 = 91;
+
+const ARROW_PREFIX: [u8; 2] = [ESC, LEFT_BRACKET];
+
+// const UP: u8 = 65;
+// const DOWN: u8 = 66;
 const RIGHT: u8 = 67;
 const LEFT: u8 = 68;
-
-use alloc::sync::Arc;
-use spin::Mutex;
-
-use crate::{buffer::TtyBuffer, tty::TtyStruct};
 
 pub enum LdiscIndex {
     RAW,
@@ -53,57 +61,28 @@ pub fn new_ldisc(index: LdiscIndex) -> Arc<TtyLdisc> {
 }
 
 #[derive(Debug)]
-struct EchoBuffer {
-    buffer: TtyBuffer,
-    col: usize,
-}
-
-impl EchoBuffer {
-    fn new() -> Self {
-        Self {
-            buffer: TtyBuffer::new(),
-            col: 0,
-        }
-    }
-    fn col(&self) -> usize {
-        self.col
-    }
-    fn col_sub_one(&mut self) {
-        self.col -= 1;
-    }
-    fn col_add_one(&mut self) {
-        self.col += 1;
-    }
-    fn col_clear(&mut self) {
-        self.col = 0;
-    }
-    fn len(&self) -> usize {
-        self.buffer.len()
-    }
-}
-
-#[derive(Debug)]
 pub struct TtyLdisc {
-    /// for tty_read()
-    read_buf: TtyBuffer,
+    /// chars for tty_read()
+    read_buf: SpinNoIrq<TtyBuffer>,
 
-    /// namely echo buffer, for the data driver sent and copy to read_buf when processing done.
-    echo_buf: Mutex<EchoBuffer>,
+    /// chars echoing on the screen.
+    echo_buf: SpinNoIrq<EchoBuffer>,
 
     /// tmp receive buffer
-    rec_buf: TtyBuffer,
+    rec_buf: SpinNoIrq<TtyBuffer>,
 }
 
 impl TtyLdisc {
     pub fn new() -> Self {
         Self {
-            read_buf: TtyBuffer::new(),
-            echo_buf: Mutex::new(EchoBuffer::new()),
-            rec_buf: TtyBuffer::new(),
+            read_buf: SpinNoIrq::new(TtyBuffer::new()),
+            echo_buf: SpinNoIrq::new(EchoBuffer::new()),
+            rec_buf: SpinNoIrq::new(TtyBuffer::new()),
         }
     }
 }
 
+/// line discipline operations
 impl TtyLdisc {
     pub fn name(&self) -> &str {
         "N_TTY"
@@ -113,56 +92,70 @@ impl TtyLdisc {
         LdiscIndex::NTty as _
     }
 
-    /// kernel wants data.
-    /// send to kernel if read_buf has.
+    /// called by kernel.
+    /// send all data of read buffer to kernel.
     pub fn read(&self, buf: &mut [u8]) -> usize {
-        // get len of read_buf
-        let len = buf.len().min(self.read_buf.len());
+        let mut read_buf = self.read_buf.lock();
+
+        // get len of this reading
+        let len = buf.len().min(read_buf.len());
+
+        // return if nothing can be read
+        if len == 0 {
+            return 0;
+        }
 
         // copy data from read_buf to `buf`
         for i in 0..len {
-            let ch = self.read_buf.delete(0);
-            buf[i] = ch;
+            buf[i] = read_buf.see(i);
         }
 
         // flush
-        self.read_buf.flush();
+        read_buf.flush();
 
         // return len of reading
         len
     }
 
-    /// driver sends data.
-    /// handle characters and echo.
-    /// seems in irq.
+    /// called by driver.
+    /// receive data from driver.
+    /// process characters and echo.
+    /// in irq.
     pub fn receive_buf(&self, tty: Arc<TtyStruct>, buf: &[u8]) {
+        let mut rec_buf = self.rec_buf.lock();
         // add to receive buffer
         for ch in buf {
-            self.rec_buf.push(*ch);
+            rec_buf.push(*ch);
         }
-        while self.rec_buf.len() > 0 {
-            let ch = self.rec_buf.see(0);
+
+        // process each char in receive buffer
+        while rec_buf.len() > 0 {
+            let ch = rec_buf.see(0);
+
+            // if char may be arrow char
             if ch == ARROW_PREFIX[0] {
-                // handle arrow char
-                if self.rec_buf.len() < 3 {
-                    // no enough len, just break
+                // no enough len, just break, waitting for next time
+                if rec_buf.len() < 3 {
                     break;
                 }
-                // enough len, check if arrow char or not
-                if self.rec_buf.see(1) != ARROW_PREFIX[1] {
-                    // not arrow, delete and ignore
-                    self.rec_buf.delete(0);
-                    self.rec_buf.delete(0);
+
+                // enough len, but not a arrow char, just ignore
+                if rec_buf.see(1) != ARROW_PREFIX[1] {
+                    rec_buf.delete(0);
+                    rec_buf.delete(0);
                     break;
                 }
-                // here, is arrow char, handle it
-                self.rec_buf.delete(0);
-                self.rec_buf.delete(0);
-                let ch = self.rec_buf.delete(0);
+
+                // it is an arrow char, get it
+                rec_buf.delete(0);
+                rec_buf.delete(0);
+                let ch = rec_buf.delete(0);
+
+                // deal with arrow char
                 match ch {
                     LEFT => {
-                        // if can left
                         let mut lock = self.echo_buf.lock();
+                        // if can go left
                         if lock.col() > 0 {
                             self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], ch]);
                             lock.col_sub_one();
@@ -170,17 +163,19 @@ impl TtyLdisc {
                     }
                     RIGHT => {
                         let mut lock = self.echo_buf.lock();
+                        // if can go right
                         if lock.col() < lock.len() {
                             self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], ch]);
                             lock.col_add_one();
                         }
                     }
                     _ => {
-                        // ignore
+                        // it is UP/DOWN, just ignore
                     }
                 }
+            // not a arrow char, handle it as a normal char
             } else {
-                // handle normal char
+                let ch = rec_buf.delete(0);
                 match ch {
                     CR | LF => {
                         // always '\n'
@@ -189,33 +184,31 @@ impl TtyLdisc {
                         // echo
                         self.write(tty.clone(), &[ch]);
 
-                        // push ch
+                        // push this char to echo buffer
                         let mut lock = self.echo_buf.lock();
                         lock.buffer.push(ch);
 
                         // copy echo buffer to read buffer
-                        // FIXME: currently flush read_buf and push all data to read_buf
+                        // FIXME: currently will push all data to read_buf
                         let len = lock.buffer.len();
                         for _ in 0..len {
-                            let ch = lock.buffer.delete(0);
-                            self.read_buf.push(ch);
+                            self.read_buf.lock().push(lock.buffer.delete(0));
                         }
 
-                        // col set to 0
+                        // echo buffer's column is set to 0
                         lock.col_clear();
                     }
                     BS | DEL => {
                         let mut lock = self.echo_buf.lock();
                         let col = lock.col();
                         let len = lock.buffer.len();
-                        // can delete
+                        // if can delete
                         if col > 0 {
-                            if col == len {
-                                self.write(tty.clone(), &[BS, SPACE, BS]);
-                                lock.buffer.delete(col - 1);
-                                lock.col_sub_one();
-                            } else {
-                                self.write(tty.clone(), &[BS, SPACE, BS]);
+                            // perform a backspace
+                            self.write(tty.clone(), &[BS, SPACE, BS]);
+
+                            // if cursor is not on the rightmost
+                            if col != len {
                                 for i in col..len {
                                     let ch = lock.buffer.see(i);
                                     self.write(tty.clone(), &[ch]);
@@ -227,45 +220,49 @@ impl TtyLdisc {
                                         &[ARROW_PREFIX[0], ARROW_PREFIX[1], LEFT],
                                     );
                                 }
-                                lock.buffer.delete(col - 1);
-                                lock.col_sub_one();
                             }
+
+                            // modify echo buffer
+                            lock.buffer.delete(col - 1);
+                            lock.col_sub_one();
                         }
                     }
                     _ => {
-                        let mut lock = self.echo_buf.lock();
-                        let col = lock.col();
-                        let len = lock.buffer.len();
-                        if col == len {
-                            self.write(tty.clone(), &[ch]);
-                            lock.buffer.push(ch);
-                            lock.col_add_one();
-                        } else {
-                            self.write(tty.clone(), &[ch]);
+                        // process normal chars.
+                        let mut echo_buf = self.echo_buf.lock();
+                        let col = echo_buf.col();
+                        let len = echo_buf.buffer.len();
+
+                        // echo
+                        self.write(tty.clone(), &[ch]);
+
+                        // if cursor is not on the rightmost
+                        if col != len {
                             for i in col..len {
-                                self.write(tty.clone(), &[lock.buffer.see(i)]);
+                                self.write(tty.clone(), &[echo_buf.buffer.see(i)]);
                             }
                             for _ in 0..(len - col) {
                                 self.write(tty.clone(), &[ARROW_PREFIX[0], ARROW_PREFIX[1], LEFT]);
                             }
-                            lock.buffer.insert(ch, col);
-                            lock.col_add_one();
                         }
+
+                        // modify echo buffer
+                        echo_buf.buffer.insert(ch, col);
+                        echo_buf.col_add_one();
                     }
                 }
-                // pop this char
-                self.rec_buf.delete(0);
             }
         }
     }
 
-    /// kernel wants to write.
+    /// called by kernel.
+    /// send data from kernel to driver.
     pub fn write(&self, tty: Arc<TtyStruct>, buf: &[u8]) -> usize {
-        // just call driver to putchar.
         let mut len = 0;
         let driver = tty.driver();
         for ch in buf {
             len += 1;
+            // call driver's putchar method
             (driver.ops.putchar)(*ch);
         }
         len

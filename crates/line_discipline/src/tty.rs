@@ -1,72 +1,48 @@
-//! struct `tty_struct` is allocated by the TTY layer upon the first open of the TTY device
-//! and released after the last close.
-//! The TTY layer passes this structure to most of struct tty_operation’s hooks.
+//! a `TtyStruct` means a tty device.
+//! The TTY layer passes it to most of struct tty_operation’s hooks.
 
 use core::sync::atomic::AtomicUsize;
 
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use lazy_init::LazyInit;
-use spin::RwLock;
+use spinlock::SpinNoIrq;
 
 use crate::{
     driver::TtyDriver,
     ldisc::{LdiscIndex, TtyLdisc},
 };
 
-pub(crate) static ALL_DEVICES: LazyInit<RwLock<AllDevices>> = LazyInit::new();
+/// save all registered devices.
+pub(super) static ALL_DEVICES: LazyInit<SpinNoIrq<Vec<Arc<TtyStruct>>>> = LazyInit::new();
 
-pub(crate) struct AllDevices {
-    inner: Vec<Arc<TtyStruct>>,
-}
+/// all devices' names.
+pub(super) static ALL_DEV_NAMES: LazyInit<SpinNoIrq<Vec<String>>> = LazyInit::new();
 
-impl AllDevices {
-    pub fn new() -> Self {
-        Self { inner: vec![] }
-    }
-    pub fn get_device_by_name(&self, name: &str) -> Option<Arc<TtyStruct>> {
-        for tty in self.inner.iter() {
-            if tty.name() == name {
-                return Some(tty.clone());
-            }
-        }
-        None
-    }
-    pub fn get_device_by_index(&self, index: usize) -> Option<Arc<TtyStruct>> {
-        for tty in self.inner.iter() {
-            if tty.index.load(core::sync::atomic::Ordering::Relaxed) == index {
-                return Some(tty.clone());
-            }
-        }
-        None
-    }
-
-    pub fn get_all_device_names(&self) -> Vec<String> {
-        let mut ret = vec![];
-        for tty in self.inner.iter() {
-            ret.push(tty.name())
-        }
-        ret
-    }
-
-    pub fn add_one_device(&mut self, tty: Arc<TtyStruct>) {
-        self.inner.push(tty);
-    }
-}
-
+/// called by kernel to get a device.
 pub fn get_device_by_name(name: &str) -> Option<Arc<TtyStruct>> {
-    ALL_DEVICES.read().get_device_by_name(name)
+    let lock = ALL_DEVICES.lock();
+    for tty in lock.iter() {
+        if tty.name() == name {
+            return Some(tty.clone());
+        }
+    }
+    None
 }
 
-pub fn get_device_by_index(index: usize) -> Option<Arc<TtyStruct>> {
-    ALL_DEVICES.read().get_device_by_index(index)
-}
-
+/// called by kernel to get all devices' names.
+/// usually used in init to get the view of tty.
 pub fn get_all_device_names() -> Vec<String> {
-    ALL_DEVICES.read().get_all_device_names()
+    let mut ret = vec![];
+    for s in ALL_DEV_NAMES.lock().iter() {
+        ret.push(s.clone());
+    }
+    ret
 }
 
+/// save a device when registered.
 pub fn add_one_device(tty: Arc<TtyStruct>) {
-    ALL_DEVICES.write().add_one_device(tty)
+    ALL_DEV_NAMES.lock().push(tty.name());
+    ALL_DEVICES.lock().push(tty);
 }
 
 #[derive(Debug)]
@@ -74,10 +50,14 @@ pub struct TtyStruct {
     /// driver index.
     driver: Arc<TtyDriver>,
 
-    pub ldisc: Arc<TtyLdisc>,
+    /// device's line discipline.
+    ldisc: Arc<TtyLdisc>,
 
     /// index of device.
     index: AtomicUsize,
+
+    /// name of device.
+    name: SpinNoIrq<String>,
 }
 
 impl TtyStruct {
@@ -86,27 +66,31 @@ impl TtyStruct {
             driver: driver.clone(),
             ldisc: crate::ldisc::new_ldisc(ldisc_index),
             index: AtomicUsize::new(0),
+            name: SpinNoIrq::new(String::new()),
         }
     }
 
+    pub fn ldisc(&self) -> Arc<TtyLdisc> {
+        self.ldisc.clone()
+    }
+
+    /// set device index.
     pub fn set_index(&self, index: usize) {
         self.index
             .store(index, core::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn name(&self) -> String {
-        let driver = self.driver.clone();
-        let mut name = driver.name();
-        name.push(
-            core::char::from_digit(
-                self.index.load(core::sync::atomic::Ordering::Relaxed) as _,
-                16,
-            )
-            .unwrap(),
-        );
-        name
+    pub fn set_name(&self, name: &str) {
+        let mut lock = self.name.lock();
+        lock.clone_from(&String::from(name));
     }
 
+    /// Convert a tty structure into a name, reflecting the kernel naming policy.
+    pub fn name(&self) -> String {
+        self.name.lock().clone()
+    }
+
+    /// get device's driver.
     pub fn driver(&self) -> Arc<TtyDriver> {
         self.driver.clone()
     }

@@ -47,52 +47,74 @@
 //! If it still does not fit, tty_port_install() can be used from the tty_driver.ops.install hook as a last resort.
 //! This is dedicated mostly for in-memory devices like PTY where tty_ports are allocated on demand.
 
-#[derive(Debug)]
-pub struct TtyDriverOps {
-    // pub write: fn(buf: &[u8]) -> usize,
-    pub putchar: fn(u8),
-}
-
 use crate::tty::TtyStruct;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::{vec, vec::Vec};
 use lazy_init::LazyInit;
-use spin::mutex::Mutex;
-use spin::RwLock;
+use spinlock::SpinNoIrq;
 
-pub(crate) static ALL_DRIVERS: LazyInit<RwLock<AllDrivers>> = LazyInit::new();
+/// a variable saving all drivers.
+/// assumed to be written in init stage.
+pub(super) static ALL_DRIVERS: LazyInit<SpinNoIrq<Vec<Arc<TtyDriver>>>> = LazyInit::new();
 
-pub struct AllDrivers {
-    inner: Vec<Arc<TtyDriver>>,
-}
-
+/// get driver by index.
 pub fn get_driver_by_index(index: usize) -> Option<Arc<TtyDriver>> {
-    ALL_DRIVERS.read().get_driver(index)
+    let lock = ALL_DRIVERS.lock();
+    for driver in lock.iter() {
+        if driver.index == index {
+            return Some(driver.clone());
+        }
+    }
+    None
 }
 
-impl AllDrivers {
-    pub fn new() -> Self {
-        Self { inner: vec![] }
-    }
+/// called by driver to register itself.
+///
+/// return driver's index.
+pub fn register_driver(ops: TtyDriverOps, name: &str) -> usize {
+    // create a tty driver structure
+    let mut driver = TtyDriver::new(ops, name);
 
-    /// add driver.
-    pub fn add_driver(&mut self, mut driver: TtyDriver) -> usize {
-        let index = self.inner.len();
-        driver.index = index;
-        let arc = Arc::new(driver);
-        self.inner.push(arc);
-        index
-    }
+    // lock
+    let mut lock = ALL_DRIVERS.lock();
 
-    pub fn get_driver(&self, index: usize) -> Option<Arc<TtyDriver>> {
-        for driver in self.inner.iter() {
-            if driver.index == index {
-                return Some(driver.clone());
-            }
-        }
-        None
+    // grant an index to the driver
+    let index = lock.len();
+    driver.index = index;
+
+    // push
+    lock.push(Arc::new(driver));
+
+    // return index
+    index
+}
+
+/// called by driver to register device.
+///
+/// return device's index, or -1 on failure.
+pub fn register_device(driver_index: usize) -> isize {
+    let mut index = -1;
+    // if driver is found
+    if let Some(driver) = get_driver_by_index(driver_index) {
+        // create a tty structure
+        let tty = Arc::new(TtyStruct::new(
+            driver.clone(),
+            crate::ldisc::LdiscIndex::NTty,
+        ));
+
+        // save this structure
+        index = driver.add_one_device(tty.clone());
+        crate::tty::add_one_device(tty.clone());
     }
+    index
+}
+
+/// the operations a driver must implement.
+#[derive(Debug)]
+pub struct TtyDriverOps {
+    /// a function to let driver push a char to device.
+    pub putchar: fn(u8),
 }
 
 #[derive(Debug)]
@@ -101,7 +123,7 @@ pub struct TtyDriver {
     pub ops: TtyDriverOps,
 
     /// devices the driver control.
-    ttys: Mutex<Vec<Arc<TtyStruct>>>,
+    ttys: SpinNoIrq<Vec<Arc<TtyStruct>>>,
 
     /// driver index.
     index: usize,
@@ -114,7 +136,7 @@ impl TtyDriver {
     pub fn new(ops: TtyDriverOps, name: &str) -> Self {
         Self {
             ops,
-            ttys: Mutex::new(vec![]),
+            ttys: SpinNoIrq::new(vec![]),
             index: 0,
             name: name.to_string(),
         }
@@ -123,8 +145,19 @@ impl TtyDriver {
     /// add a device, return its index, -1 means failure.
     fn add_one_device(&self, tty: Arc<TtyStruct>) -> isize {
         let index = self.ttys.lock().len();
+
+        // set index of device
         tty.set_index(index);
+
+        // set name of device
+        let mut name = self.name.clone();
+        name.push(core::char::from_digit(index as _, 16).unwrap());
+        tty.set_name(&name);
+
+        // save this device
         self.ttys.lock().push(tty);
+
+        // return device's index
         index as _
     }
 
@@ -146,7 +179,7 @@ impl TtyDriver {
         ret
     }
 
-    ///
+    /// get device
     pub fn get_device_by_name(&self, name: &str) -> Option<Arc<TtyStruct>> {
         for tty in self.ttys.lock().iter() {
             if tty.name() == name {
@@ -156,6 +189,7 @@ impl TtyDriver {
         None
     }
 
+    /// get device
     pub fn get_device_by_index(&self, index: usize) -> Option<Arc<TtyStruct>> {
         let lock = self.ttys.lock();
         if let Some(dev) = lock.get(index) {
@@ -163,29 +197,6 @@ impl TtyDriver {
         }
         None
     }
-}
-
-/// called by driver to register itself.
-///
-/// return driver's index.
-pub fn register_driver(ops: TtyDriverOps, name: &str) -> usize {
-    let driver = TtyDriver::new(ops, name);
-    ALL_DRIVERS.write().add_driver(driver)
-}
-
-/// called by driver to register device.
-///
-/// return device's index, -1 means failure.
-pub fn register_device(driver_index: usize) -> isize {
-    let driver = ALL_DRIVERS.read().get_driver(driver_index);
-    let mut index = -1;
-    if let Some(d) = driver {
-        let tty = TtyStruct::new(d.clone(), crate::ldisc::LdiscIndex::NTty);
-        let tty = Arc::new(tty);
-        index = d.add_one_device(tty.clone());
-        crate::tty::add_one_device(tty.clone());
-    }
-    index
 }
 
 // /// tty driver's operations.

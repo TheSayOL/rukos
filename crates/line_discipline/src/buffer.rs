@@ -2,81 +2,23 @@
 //! Drivers are supposed to fill the buffer by one of those functions below
 //! and then flip the buffer, so that the data are passed to line discipline for further processing.
 
-use spin::mutex::Mutex;
-
 const TTY_BUF_SIZE: usize = 4096;
 
-/// a buffer to save characters.
+/// a buffer for characters.
 #[derive(Debug)]
 pub struct TtyBuffer {
-    inner: Mutex<TtyBufferInner>,
-}
-
-#[derive(Debug)]
-struct TtyBufferInner {
     buf: [u8; TTY_BUF_SIZE],
     len: usize,
 }
 
 impl TtyBuffer {
     pub fn new() -> Self {
-        let inner = TtyBufferInner {
+        Self {
             buf: [0u8; TTY_BUF_SIZE],
             len: 0,
-        };
-        let inner = Mutex::new(inner);
-        Self { inner }
-    }
-    /// flush buffer.
-    pub fn flush(&self) {
-        self.inner.lock().flush()
+        }
     }
 
-    /// get buffer[index] without modifying buffer.
-    pub fn see(&self, index: usize) -> u8 {
-        self.inner.lock().see(index)
-    }
-
-    pub fn full(&self) -> bool {
-        self.inner.lock().full()
-    }
-
-    pub fn empty(&self) -> bool {
-        self.inner.lock().empty()
-    }
-
-    /// insert a character `ch` to buffer[index].
-    pub fn insert(&self, ch: u8, index: usize) {
-        self.inner.lock().insert(ch, index)
-    }
-
-    /// delete last character in buffer.
-    pub fn pop(&self) {
-        self.inner.lock().pop()
-    }
-
-    /// push a charachter to buffer
-    pub fn push(&self, ch: u8) {
-        self.inner.lock().push(ch)
-    }
-
-    /// push characters to buffer
-    pub fn push_many(&self, chars: &[u8]) {
-        self.inner.lock().push_many(chars)
-    }
-
-    /// delete a character in buffer[index].
-    pub fn delete(&self, index: usize) -> u8 {
-        self.inner.lock().delete(index)
-    }
-
-    /// get index
-    pub fn len(&self) -> usize {
-        self.inner.lock().len
-    }
-}
-
-impl TtyBufferInner {
     /// flush buffer.
     pub fn flush(&mut self) {
         self.len = 0;
@@ -98,9 +40,9 @@ impl TtyBufferInner {
         self.len == 0
     }
 
-    /// insert a character `ch` to buffer[index].
+    /// insert one char `ch` to buffer's `index`th place.
     pub fn insert(&mut self, ch: u8, index: usize) {
-        if !self.full() && index < self.len {
+        if !self.full() && index <= self.len {
             // copy buffer[index..len] to buffer[index+1..len+1]
             for i in (index..self.len).rev() {
                 self.buf[i + 1] = self.buf[i];
@@ -112,7 +54,7 @@ impl TtyBufferInner {
     }
 
     /// delete last character in buffer.
-    pub fn pop(&mut self) {
+    pub fn _pop(&mut self) {
         if !self.empty() {
             self.len -= 1;
         }
@@ -123,17 +65,6 @@ impl TtyBufferInner {
         if !self.full() {
             self.buf[self.len] = ch;
             self.len += 1;
-        }
-    }
-
-    /// push characters to buffer
-    pub fn push_many(&mut self, chars: &[u8]) {
-        // only copy when not overflow
-        if self.len + chars.len() <= TTY_BUF_SIZE {
-            for ch in chars {
-                self.push(*ch);
-            }
-            self.len += chars.len();
         }
     }
 
@@ -156,13 +87,43 @@ impl TtyBufferInner {
     }
 
     /// get buf.
-    pub fn buf(&self) -> &[u8] {
+    pub fn _buf(&self) -> &[u8] {
         &self.buf
     }
 
     /// get index
     pub fn len(&self) -> usize {
         self.len
+    }
+}
+
+#[derive(Debug)]
+pub struct EchoBuffer {
+    pub buffer: TtyBuffer,
+    pub col: usize,
+}
+
+impl EchoBuffer {
+    pub fn new() -> Self {
+        Self {
+            buffer: TtyBuffer::new(),
+            col: 0,
+        }
+    }
+    pub fn col(&self) -> usize {
+        self.col
+    }
+    pub fn col_sub_one(&mut self) {
+        self.col -= 1;
+    }
+    pub fn col_add_one(&mut self) {
+        self.col += 1;
+    }
+    pub fn col_clear(&mut self) {
+        self.col = 0;
+    }
+    pub fn len(&self) -> usize {
+        self.buffer.len()
     }
 }
 
