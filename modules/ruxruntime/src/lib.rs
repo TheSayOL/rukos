@@ -196,7 +196,7 @@ pub extern "C" fn rust_main(cpu_id: usize, dtb: usize) -> ! {
     }
 
     #[cfg(feature = "tty")]
-    line_discipline::init();
+    tty::init();
 
     info!("Initialize platform devices...");
     ruxhal::platform_init();

@@ -37,7 +37,7 @@ members = [
     "crates/spinlock",
     "crates/timer_list",
     "crates/tuple_for_each",
-    "crates/line_discipline",
+    "crates/tty",
 
     "modules/axalloc",
     "modules/axlog",

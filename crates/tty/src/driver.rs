@@ -48,7 +48,7 @@
 //! This is dedicated mostly for in-memory devices like PTY where tty_ports are allocated on demand.
 
 use crate::tty::TtyStruct;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::{vec, vec::Vec};
 use lazy_init::LazyInit;
@@ -138,7 +138,7 @@ impl TtyDriver {
             ops,
             ttys: SpinNoIrq::new(vec![]),
             index: 0,
-            name: name.to_string(),
+            name: String::from(name),
         }
     }
 

@@ -21,7 +21,6 @@ rtc = []
 tls = ["alloc"]
 default = []
 musl = []
-tty = ["line_discipline", "irq"]
 
 [dependencies]
 log = "0.4"
@@ -42,7 +41,7 @@ percpu = { path = "../../crates/percpu" }
 memory_addr = { path = "../../crates/memory_addr" }
 handler_table = { path = "../../crates/handler_table" }
 crate_interface = { path = "../../crates/crate_interface" }
-line_discipline = { path = "../../crates/line_discipline", optional = true }
+tty = { path = "../../crates/tty", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86 = "0.52"

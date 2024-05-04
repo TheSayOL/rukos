@@ -101,9 +101,9 @@ pub fn init_early() {
 }
 
 #[cfg(feature = "tty")]
-static mut DRIVER_INDEX: usize = 0;
+static DRIVER_INDEX: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 #[cfg(feature = "tty")]
-static mut DEV_INDEX: usize = 0;
+static DEV_INDEX: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 
 /// Set UART IRQ Enable
 pub fn init() {
@@ -111,12 +111,12 @@ pub fn init() {
     {
         #[cfg(feature = "tty")]
         {
-            let ops = line_discipline::TtyDriverOps { putchar: putchar };
-            let driver_index = line_discipline::register_driver(ops, "ttyS");
-            let dev_index = line_discipline::register_device(driver_index);
+            let ops = tty::TtyDriverOps { putchar: putchar };
+            let driver_index = tty::register_driver(ops, "ttyS");
+            let dev_index = tty::register_device(driver_index);
             unsafe {
-                DRIVER_INDEX = driver_index;
-                DEV_INDEX = dev_index as _;
+                DRIVER_INDEX.store(driver_index as _, core::sync::atomic::Ordering::Relaxed);
+                DEV_INDEX.store(dev_index as _, core::sync::atomic::Ordering::Relaxed);
             }
         }
         crate::irq::register_handler(crate::platform::irq::UART_IRQ_NUM, irq_handler);
@@ -145,7 +145,9 @@ pub fn irq_handler() {
                 len += 1;
             }
             unsafe {
-                line_discipline::tty_receive_buf(DRIVER_INDEX, DEV_INDEX, &buf[..len]);
+                let driver_idx = DRIVER_INDEX.load(core::sync::atomic::Ordering::Relaxed);
+                let dev_idx = DEV_INDEX.load(core::sync::atomic::Ordering::Relaxed);
+                tty::tty_receive_buf(driver_idx, dev_idx, &buf[..len]);
             }
         }
     }

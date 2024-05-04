@@ -113,7 +113,7 @@ pub fn tty_read(buf: &mut [u8], dev_name: &str) -> usize {
 
     #[cfg(feature = "tty")]
     {
-        line_discipline::tty_read(buf, dev_name)
+        tty::tty_read(buf, dev_name)
     }
 }
 
@@ -124,7 +124,7 @@ extern crate alloc;
 pub fn get_all_device_names() -> alloc::vec::Vec<alloc::string::String> {
     #[cfg(feature = "tty")]
     {
-        line_discipline::get_all_device_names()
+        tty::get_all_device_names()
     }
     #[cfg(not(feature = "tty"))]
     {
@@ -135,7 +135,7 @@ pub fn get_all_device_names() -> alloc::vec::Vec<alloc::string::String> {
 pub fn tty_write(buf: &[u8], dev_name: &str) -> usize {
     #[cfg(feature = "tty")]
     {
-        line_discipline::tty_write(buf, dev_name)
+        tty::tty_write(buf, dev_name)
     }
     #[cfg(not(feature = "tty"))]
     {
