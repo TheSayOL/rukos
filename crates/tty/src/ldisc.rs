@@ -141,15 +141,15 @@ impl TtyLdisc {
 
                 // enough len, but not a arrow char, just ignore
                 if rec_buf.see(1) != ARROW_PREFIX[1] {
-                    rec_buf.delete(0);
-                    rec_buf.delete(0);
+                    rec_buf.pop();
+                    rec_buf.pop();
                     break;
                 }
 
                 // it is an arrow char, get it
-                rec_buf.delete(0);
-                rec_buf.delete(0);
-                let ch = rec_buf.delete(0);
+                rec_buf.pop();
+                rec_buf.pop();
+                let ch = rec_buf.pop();
 
                 // deal with arrow char
                 match ch {
@@ -175,7 +175,7 @@ impl TtyLdisc {
                 }
             // not a arrow char, handle it as a normal char
             } else {
-                let ch = rec_buf.delete(0);
+                let ch = rec_buf.pop();
                 match ch {
                     CR | LF => {
                         // always '\n'
@@ -192,7 +192,7 @@ impl TtyLdisc {
                         // FIXME: currently will push all data to read_buf
                         let len = lock.buffer.len();
                         for _ in 0..len {
-                            self.read_buf.push(lock.buffer.delete(0));
+                            self.read_buf.push(lock.buffer.pop());
                         }
 
                         // echo buffer's column is set to 0

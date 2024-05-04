@@ -7,6 +7,7 @@ const TTY_BUF_SIZE: usize = 4096;
 /// ring buffer.
 #[derive(Debug)]
 struct RingBuffer {
+    /// data.
     buf: [u8; TTY_BUF_SIZE],
     /// the first element or empty slot if buffer is empty.
     head: usize,
@@ -53,16 +54,6 @@ impl TtyBuffer {
         }
     }
 
-    // /// is buffer full or not.
-    // pub fn full(&self) -> bool {
-    //     self.buffer.lock().len == TTY_BUF_SIZE
-    // }
-
-    // /// is buffer empty or not.
-    // pub fn empty(&self) -> bool {
-    //     self.buffer.lock().len == 0
-    // }
-
     /// push a charachter
     pub fn push(&self, ch: u8) {
         let mut buf = self.buffer.lock();
@@ -74,17 +65,18 @@ impl TtyBuffer {
         }
     }
 
-    // /// delete and return last character.
-    // pub fn pop(&self) -> u8 {
-    //     let mut buf = self.buffer.lock();
-    //     if buf.len != 0 {
-    //         buf.len -= 1;
-    //         buf.tail = (buf.tail - 1) % TTY_BUF_SIZE;
-    //         buf.buf[buf.tail]
-    //     } else {
-    //         0
-    //     }
-    // }
+    /// delete and return last character.
+    pub fn pop(&self) -> u8 {
+        self.delete(0)
+        // let mut buf = self.buffer.lock();
+        // if buf.len != 0 {
+        //     buf.len -= 1;
+        //     buf.tail = (buf.tail - 1) % TTY_BUF_SIZE;
+        //     buf.buf[buf.tail]
+        // } else {
+        //     0
+        // }
+    }
 
     /// insert char `ch` to buffer's index'th slot.
     pub fn insert(&self, ch: u8, index: usize) {
