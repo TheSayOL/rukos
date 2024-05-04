@@ -63,21 +63,21 @@ pub fn new_ldisc(index: LdiscIndex) -> Arc<TtyLdisc> {
 #[derive(Debug)]
 pub struct TtyLdisc {
     /// chars for tty_read()
-    read_buf: SpinNoIrq<TtyBuffer>,
+    read_buf: TtyBuffer,
 
     /// chars echoing on the screen.
     echo_buf: SpinNoIrq<EchoBuffer>,
 
     /// tmp receive buffer
-    rec_buf: SpinNoIrq<TtyBuffer>,
+    rec_buf: TtyBuffer,
 }
 
 impl TtyLdisc {
     pub fn new() -> Self {
         Self {
-            read_buf: SpinNoIrq::new(TtyBuffer::new()),
+            read_buf: TtyBuffer::new(),
             echo_buf: SpinNoIrq::new(EchoBuffer::new()),
-            rec_buf: SpinNoIrq::new(TtyBuffer::new()),
+            rec_buf: TtyBuffer::new(),
         }
     }
 }
@@ -95,7 +95,7 @@ impl TtyLdisc {
     /// called by kernel.
     /// send all data of read buffer to kernel.
     pub fn read(&self, buf: &mut [u8]) -> usize {
-        let mut read_buf = self.read_buf.lock();
+        let read_buf = &self.read_buf;
 
         // get len of this reading
         let len = buf.len().min(read_buf.len());
@@ -122,7 +122,7 @@ impl TtyLdisc {
     /// process characters and echo.
     /// in irq.
     pub fn receive_buf(&self, tty: Arc<TtyStruct>, buf: &[u8]) {
-        let mut rec_buf = self.rec_buf.lock();
+        let rec_buf = &self.rec_buf;
         // add to receive buffer
         for ch in buf {
             rec_buf.push(*ch);
@@ -192,7 +192,7 @@ impl TtyLdisc {
                         // FIXME: currently will push all data to read_buf
                         let len = lock.buffer.len();
                         for _ in 0..len {
-                            self.read_buf.lock().push(lock.buffer.delete(0));
+                            self.read_buf.push(lock.buffer.delete(0));
                         }
 
                         // echo buffer's column is set to 0

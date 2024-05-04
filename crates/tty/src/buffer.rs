@@ -4,96 +4,137 @@
 
 const TTY_BUF_SIZE: usize = 4096;
 
-/// a buffer for characters.
+/// ring buffer.
+#[derive(Debug)]
+struct RingBuffer {
+    buf: [u8; TTY_BUF_SIZE],
+    /// the first element or empty slot if buffer is empty.
+    head: usize,
+    /// the first empty slot.
+    tail: usize,
+    /// number of elements.
+    len: usize,
+}
+
+/// characters buffer.
 #[derive(Debug)]
 pub struct TtyBuffer {
-    buf: [u8; TTY_BUF_SIZE],
-    len: usize,
+    buffer: spinlock::SpinNoIrq<RingBuffer>,
 }
 
 impl TtyBuffer {
     pub fn new() -> Self {
-        Self {
+        let buf = RingBuffer {
             buf: [0u8; TTY_BUF_SIZE],
+            head: 0,
+            tail: 0,
             len: 0,
+        };
+        Self {
+            buffer: spinlock::SpinNoIrq::new(buf),
         }
     }
 
     /// flush buffer.
-    pub fn flush(&mut self) {
-        self.len = 0;
+    pub fn flush(&self) {
+        let mut buf = self.buffer.lock();
+        buf.len = 0;
+        buf.head = 0;
+        buf.tail = 0;
     }
 
+    /// get buffer's index'th element.
     pub fn see(&self, index: usize) -> u8 {
-        if index < TTY_BUF_SIZE {
-            self.buf[index]
+        let buf = self.buffer.lock();
+        if index < buf.len {
+            buf.buf[(index + buf.head) % TTY_BUF_SIZE]
         } else {
             0
         }
     }
 
-    pub fn full(&self) -> bool {
-        self.len == TTY_BUF_SIZE
+    // /// is buffer full or not.
+    // pub fn full(&self) -> bool {
+    //     self.buffer.lock().len == TTY_BUF_SIZE
+    // }
+
+    // /// is buffer empty or not.
+    // pub fn empty(&self) -> bool {
+    //     self.buffer.lock().len == 0
+    // }
+
+    /// push a charachter
+    pub fn push(&self, ch: u8) {
+        let mut buf = self.buffer.lock();
+        if buf.len != TTY_BUF_SIZE {
+            buf.len += 1;
+            let idx = buf.tail;
+            buf.buf[idx] = ch;
+            buf.tail = (buf.tail + 1) % TTY_BUF_SIZE;
+        }
     }
 
-    pub fn empty(&self) -> bool {
-        self.len == 0
-    }
+    // /// delete and return last character.
+    // pub fn pop(&self) -> u8 {
+    //     let mut buf = self.buffer.lock();
+    //     if buf.len != 0 {
+    //         buf.len -= 1;
+    //         buf.tail = (buf.tail - 1) % TTY_BUF_SIZE;
+    //         buf.buf[buf.tail]
+    //     } else {
+    //         0
+    //     }
+    // }
 
-    /// insert one char `ch` to buffer's `index`th place.
-    pub fn insert(&mut self, ch: u8, index: usize) {
-        if !self.full() && index <= self.len {
-            // copy buffer[index..len] to buffer[index+1..len+1]
-            for i in (index..self.len).rev() {
-                self.buf[i + 1] = self.buf[i];
+    /// insert char `ch` to buffer's index'th slot.
+    pub fn insert(&self, ch: u8, index: usize) {
+        let mut buf = self.buffer.lock();
+        // if not full and index is right
+        if buf.len != TTY_BUF_SIZE && index <= buf.len {
+            // shift buffer[index..move_len+index] one slot right.
+            let move_len = buf.len - index;
+            let mut i = buf.tail;
+            for _ in 0..move_len {
+                i -= 1;
+                buf.buf[(i + 1) % TTY_BUF_SIZE] = buf.buf[i % TTY_BUF_SIZE];
             }
             // insert
-            self.buf[index] = ch;
-            self.len += 1;
-        }
-    }
-
-    /// delete last character in buffer.
-    pub fn _pop(&mut self) {
-        if !self.empty() {
-            self.len -= 1;
-        }
-    }
-
-    /// push a charachter to buffer
-    pub fn push(&mut self, ch: u8) {
-        if !self.full() {
-            self.buf[self.len] = ch;
-            self.len += 1;
+            let idx = (buf.head + index) % TTY_BUF_SIZE;
+            buf.buf[idx] = ch;
+            buf.len += 1;
+            buf.tail = (buf.tail + 1) % TTY_BUF_SIZE;
         }
     }
 
     /// delete a character in buffer[index].
-    pub fn delete(&mut self, index: usize) -> u8 {
-        let mut ret = 0;
-        if !self.empty() && index < self.len {
-            // save retval
-            ret = self.buf[index];
+    pub fn delete(&self, index: usize) -> u8 {
+        let mut buf = self.buffer.lock();
+        // if not empty and index is right
+        if buf.len != 0 && index < buf.len {
+            let move_len = buf.len - index;
+            let mut i = index + buf.head;
 
-            // copy buffer[index+1..len] to buffer[index..len-1];
-            for i in index + 1..self.len {
-                self.buf[i - 1] = self.buf[i];
+            // save retval
+            let ret = buf.buf[i % TTY_BUF_SIZE];
+
+            // copy move_len elements from buffer[index+head] to buffer[index+head-1];
+            for _ in 0..move_len {
+                buf.buf[i % TTY_BUF_SIZE] = buf.buf[(i + 1) % TTY_BUF_SIZE];
+                i += 1;
             }
 
             // len -= 1
-            self.len -= 1;
+            buf.len -= 1;
+            buf.tail -= 1;
+            ret
+        } else {
+            0
         }
-        ret
-    }
-
-    /// get buf.
-    pub fn _buf(&self) -> &[u8] {
-        &self.buf
     }
 
     /// get index
     pub fn len(&self) -> usize {
-        self.len
+        self.buffer.lock().len
     }
 }
 
@@ -126,151 +167,3 @@ impl EchoBuffer {
         self.buffer.len()
     }
 }
-
-// /// Queue a series of bytes to the tty buffering.
-// /// All the characters passed are marked with the supplied flag.
-// /// Return: the number added.
-// pub fn tty_insert_flip_string_fixed_flag(
-//     port: *mut TtyPort,
-//     chars: *const c_uchar,
-//     flag: c_char,
-//     size: c_size_t,
-// ) -> c_int {
-//     unimplemented!()
-// }
-
-// /// Queue a series of bytes to the tty buffering.
-// /// For each character the flags array indicates the status of the character.
-// /// Return: the number added.
-// pub fn tty_insert_flip_string_flags(
-//     port: *mut TtyPort,
-//     chars: *const c_uchar,
-//     flags: *const c_char,
-//     size: c_size_t,
-// ) -> c_int {
-//     unimplemented!()
-// }
-
-// /// Queue a single byte `ch` to the tty buffering, with an optional flag.
-// /// This is the slow path of tty_insert_flip_char().
-// pub fn __tty_insert_flip_char(port: *mut TtyPort, ch: c_uchar, flag: c_char) -> c_int {
-//     unimplemented!()
-// }
-
-// /// Prepare a block of space in the buffer for data.
-// /// This is used for drivers that need their own block copy routines into the buffer.
-// /// There is no guarantee the buffer is a DMA target!
-// /// `chars`: return pointer for character write area
-// /// Return: the length available and `chars` to the space which is now allocated
-// /// and accounted for as ready for normal characters.
-// pub fn tty_prepare_flip_string(
-//     port: *mut TtyPort,
-//     chars: *mut *mut c_uchar,
-//     size: c_size_t,
-// ) -> c_int {
-//     unimplemented!()
-// }
-
-// /// forward data to line discipline
-// /// Callers other than flush_to_ldisc() need to exclude the kworker
-// /// from concurrent use of the line discipline, see paste_selection().
-// /// `p`: char buffer
-// /// `f`: TTY_NORMAL, TTY_BREAK, etc. flags buffer
-// /// Return: the number of bytes processed.
-// pub fn tty_ldisc_receive_buf(
-//     ld: *mut TtyLdisc,
-//     p: *const c_uchar,
-//     f: *const c_char,
-//     count: c_int,
-// ) -> c_int {
-//     unimplemented!()
-// }
-
-// /// Queue a push of the terminal flip buffers to the line discipline.
-// /// Can be called from IRQ/atomic context.
-// /// In the event of the queue being busy for flipping the work will be held off and retried later.
-// pub fn tty_flip_buffer_push(port: *mut TtyPort) {
-//     unimplemented!()
-// }
-
-// /// Return unused buffer space
-// /// `port`: tty port owning the flip buffer
-// /// Return: the # of bytes which can be written by the driver without reaching the buffer limit.
-// /// Note: this does not guarantee that memory is available to write the returned # of bytes
-// /// (use tty_prepare_flip_string() to pre-allocate if memory guarantee is required).
-// pub fn tty_buffer_space_avail(port: *mut TtyPort) -> c_uint {
-//     unimplemented!()
-// }
-
-// /// Change the tty buffer memory limit.
-// /// Must be called before the other tty buffer functions are used.
-// pub fn tty_buffer_set_limit(port: *mut TtyPort, limit: c_int) -> c_int {
-//     unimplemented!()
-// }
-
-// /// gain exclusive access to buffer
-// /// used only in special circumstances. Avoid it.
-// /// Guarantees safe use of the tty_ldisc_ops.receive_buf() method
-// /// by excluding the buffer work and any pending flush from using the flip buffer.
-// /// Data can continue to be added concurrently to the flip buffer from the driver side.
-// pub fn tty_buffer_lock_exclusive(port: *mut TtyPort) {
-//     unimplemented!()
-// }
-
-// /// release exclusive access
-// /// used only in special circumstances. Avoid it.
-// /// The buffer work is restarted if there is data in the flip buffer.
-// pub fn tty_buffer_unlock_exclusive(port: *mut TtyPort) {
-//     unimplemented!()
-// }
-
-// /// free buffers used by a tty.
-// /// Remove all the buffers pending on a tty whether queued with data or in the free ring.
-// /// Must be called when the tty is no longer in use.
-// fn tty_buffer_free_all(port: *mut TtyPort) {
-//     unimplemented!()
-// }
-
-// /// Allocate a new tty buffer to hold the desired number of characters.
-// /// We round our buffers off in 256 character chunks to get better allocation behaviour.
-// /// `size`: desired size (characters)
-// /// Return: NULL if OOM or the allocation would exceed the per device queue.
-// fn tty_buffer_alloc(port: *mut TtyPort, size: c_size_t) -> *mut TtyBuffer {
-//     unimplemented!()
-// }
-
-// /// Free a tty buffer, or add it to the free list according to our internal strategy.
-// fn tty_buffer_free(port: *mut TtyPort, b: *mut TtyBuffer) {
-//     unimplemented!()
-// }
-
-// /// Flush all the buffers containing receive data.
-// /// If ld != NULL, flush the ldisc input buffer.
-// /// Locking: takes buffer lock to ensure single-threaded flip buffer ‘consumer’.
-// fn tty_buffer_flush(tty: *mut TtyStruct, ld: TtyLdisc) {
-//     unimplemented!()
-// }
-
-// /// grow tty buffer if needed.
-// /// Make at least `size` bytes of linear space available for the tty buffer.
-// /// Will change over to a new buffer if the current buffer is encoded as TTY_NORMAL
-// /// (so has no flags buffer) and the new buffer requires a flags buffer.
-// /// `flags`: buffer flags if new buffer allocated (default = 0)
-// /// Return: the size we managed to find.
-// fn __tty_buffer_request_room(port: *mut TtyPort, size: c_size_t, flags: c_int) -> c_int {
-//     unimplemented!()
-// }
-
-// /// Called out of the software interrupt to flush data from the buffer chain to the line discipline.
-// /// The receive_buf() method is single threaded for each tty instance.
-// /// `work`: tty structure passed from work queue.
-// /// Locking: takes buffer lock to ensure single-threaded flip buffer ‘consumer’.
-// fn flush_to_ldisc(work: *mut WorkStruct) {
-//     unimplemented!()
-// }
-
-// /// Set up the initial state of the buffer management for a tty device.
-// /// Must be called before the other tty buffer functions are used.
-// fn tty_buffer_init(port: *mut TtyPort) {
-//     unimplemented!()
-// }
