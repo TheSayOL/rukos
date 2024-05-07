@@ -96,6 +96,7 @@ pub use self::platform::platform_init_secondary;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub static mut COMLINE_BUF: [u8; 256] = [0; 256];
 
+/// read a tty device specified by its name.
 pub fn tty_read(buf: &mut [u8], dev_name: &str) -> usize {
     #[cfg(not(feature = "tty"))]
     {
@@ -120,6 +121,7 @@ pub fn tty_read(buf: &mut [u8], dev_name: &str) -> usize {
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+/// get all tty devices' names.
 #[cfg(feature = "alloc")]
 pub fn get_all_device_names() -> alloc::vec::Vec<alloc::string::String> {
     #[cfg(feature = "tty")]
@@ -132,6 +134,7 @@ pub fn get_all_device_names() -> alloc::vec::Vec<alloc::string::String> {
     }
 }
 
+/// write a tty device specified by its name.
 pub fn tty_write(buf: &[u8], dev_name: &str) -> usize {
     #[cfg(feature = "tty")]
     {
