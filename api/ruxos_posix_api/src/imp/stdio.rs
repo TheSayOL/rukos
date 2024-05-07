@@ -40,7 +40,7 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 static STDIO_TTY_NAME: lazy_init::LazyInit<alloc::string::String> = lazy_init::LazyInit::new();
 #[cfg(not(feature = "alloc"))]
-static STDIO_TTY_NAME: &str = "notty";
+static STDIO_TTY_NAME: &str = "dummy";
 
 fn get_stdio_tty_name() -> &'static str {
     #[cfg(feature = "alloc")]
