@@ -1007,16 +1007,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "line_discipline"
-version = "0.0.1"
-dependencies = [
- "lazy_init",
- "log",
- "spin 0.9.8",
- "spinlock",
-]
-
-[[package]]
 name = "linked_list"
 version = "0.1.0"
 
@@ -1606,7 +1596,6 @@ dependencies = [
  "handler_table",
  "kernel_guard",
  "lazy_init",
- "line_discipline",
  "log",
  "memory_addr",
  "page_table",
@@ -1620,6 +1609,7 @@ dependencies = [
  "spinlock",
  "static_assertions",
  "tock-registers",
+ "tty",
  "x2apic",
  "x86",
  "x86_64",
@@ -1683,6 +1673,7 @@ dependencies = [
  "crate_interface",
  "elf",
  "flatten_objects",
+ "lazy_init",
  "lazy_static",
  "memory_addr",
  "page_table",
@@ -1711,7 +1702,6 @@ dependencies = [
  "dtb",
  "kernel_guard",
  "lazy_init",
- "line_discipline",
  "percpu",
  "rux9p",
  "ruxconfig",
@@ -1721,6 +1711,7 @@ dependencies = [
  "ruxfutex",
  "ruxhal",
  "ruxtask",
+ "tty",
 ]
 
 [[package]]
@@ -2022,6 +2013,15 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "tty"
+version = "0.0.1"
+dependencies = [
+ "lazy_init",
+ "log",
+ "spinlock",
 ]
 
 [[package]]
