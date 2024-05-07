@@ -27,7 +27,7 @@ irq = ["ruxhal/irq", "ruxruntime/irq", "ruxtask?/irq"]
 rtc = ["ruxhal/rtc", "ruxruntime/rtc"]
 
 # Memory
-alloc = ["axalloc", "ruxruntime/alloc", "ruxfs/alloc"]
+alloc = ["axalloc", "ruxruntime/alloc", "ruxfs/alloc", "ruxhal/alloc"]
 alloc-tlsf = ["axalloc/tlsf"]
 alloc-slab = ["axalloc/slab"]
 alloc-buddy = ["axalloc/buddy"]
