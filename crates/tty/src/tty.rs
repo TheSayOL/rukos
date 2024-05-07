@@ -9,11 +9,6 @@ use crate::{driver::TtyDriver, ldisc::TtyLdisc};
 /// all registered devices.
 pub(super) static ALL_DEVICES: LazyInit<SpinNoIrq<Vec<Arc<TtyStruct>>>> = LazyInit::new();
 
-/// all devices' names.
-/// used for read-only perpose.
-/// being written when registering a device, and read when kernel needs.
-pub(super) static ALL_DEV_NAMES: LazyInit<SpinNoIrq<Vec<String>>> = LazyInit::new();
-
 /// tty device.
 #[derive(Debug)]
 pub struct TtyStruct {
@@ -82,16 +77,19 @@ pub fn get_device_by_name(name: &str) -> Option<Arc<TtyStruct>> {
 /// called by kernel to get all devices' names.
 /// usually used in init to get the view of tty.
 pub fn get_all_device_names() -> Vec<String> {
-    ALL_DEV_NAMES.lock().clone()
+    let mut ret = vec![];
+    let alldev = ALL_DEVICES.lock();
+    for dev in alldev.iter() {
+        ret.push(dev.name());
+    }
+    ret
 }
 
 /// save a device when registered.
 pub fn add_one_device(tty: Arc<TtyStruct>) {
-    ALL_DEV_NAMES.lock().push(tty.name());
     ALL_DEVICES.lock().push(tty);
 }
 
 pub fn init() {
     ALL_DEVICES.init_by(SpinNoIrq::new(vec![]));
-    ALL_DEV_NAMES.init_by(SpinNoIrq::new(vec![]));
 }
