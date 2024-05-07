@@ -46,8 +46,8 @@ impl TtyLdisc {
         }
 
         // copy data from read_buf to `buf`
-        for i in 0..len {
-            buf[i] = read_buf.pop();
+        for ch in buf.iter_mut().take(len) {
+            *ch = read_buf.pop();
         }
 
         len
@@ -202,5 +202,11 @@ impl TtyLdisc {
             (driver.ops.putchar)(*ch);
         }
         len
+    }
+}
+
+impl Default for TtyLdisc {
+    fn default() -> Self {
+        Self::new()
     }
 }

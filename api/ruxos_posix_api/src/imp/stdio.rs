@@ -19,18 +19,18 @@ use {
     core::sync::atomic::{AtomicBool, Ordering},
 };
 
-fn console_read_bytes() -> Option<u8> {
-    let ret = ruxhal::console::getchar().map(|c| if c == b'\r' { b'\n' } else { c });
-    if let Some(c) = ret {
-        let _ = console_write_bytes(&[c]);
-    }
-    ret
-}
+// fn console_read_bytes() -> Option<u8> {
+//     let ret = ruxhal::console::getchar().map(|c| if c == b'\r' { b'\n' } else { c });
+//     if let Some(c) = ret {
+//         let _ = console_write_bytes(&[c]);
+//     }
+//     ret
+// }
 
-fn console_write_bytes(buf: &[u8]) -> AxResult<usize> {
-    ruxhal::console::write_bytes(buf);
-    Ok(buf.len())
-}
+// fn console_write_bytes(buf: &[u8]) -> AxResult<usize> {
+//     ruxhal::console::write_bytes(buf);
+//     Ok(buf.len())
+// }
 
 struct StdinRaw;
 struct StdoutRaw;
@@ -39,7 +39,7 @@ static STDIO_TTY_NAME: lazy_init::LazyInit<alloc::string::String> = lazy_init::L
 
 fn get_stdio_tty_name() -> &'static str {
     if !STDIO_TTY_NAME.is_init() {
-        let name = ruxhal::get_all_device_names().get(0).unwrap().clone();
+        let name = ruxhal::get_all_device_names().first().unwrap().clone();
         STDIO_TTY_NAME.init_by(name);
     }
     &STDIO_TTY_NAME
@@ -48,13 +48,13 @@ fn get_stdio_tty_name() -> &'static str {
 impl Read for StdinRaw {
     // Non-blocking read, returns number of bytes read.
     fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
-        Ok(ruxhal::tty_read(buf, &get_stdio_tty_name()))
+        Ok(ruxhal::tty_read(buf, get_stdio_tty_name()))
     }
 }
 
 impl Write for StdoutRaw {
     fn write(&mut self, buf: &[u8]) -> AxResult<usize> {
-        Ok(ruxhal::tty_write(buf, &get_stdio_tty_name()))
+        Ok(ruxhal::tty_write(buf, get_stdio_tty_name()))
     }
 
     fn flush(&mut self) -> AxResult {
