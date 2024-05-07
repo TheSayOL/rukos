@@ -102,7 +102,7 @@ pub fn sys_ioctl(fd: c_int, request: usize, data: usize) -> c_int {
             TIOCGPGRP => {
                 warn!("stdout TIOCGPGRP, pretend to be have a tty process group.");
                 unsafe {
-                    *(data as *mut u32) = sys_getpgid(0)as _;
+                    *(data as *mut u32) = sys_getpgid(0) as _;
                 }
                 Ok(0)
             }
