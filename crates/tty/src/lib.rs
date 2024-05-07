@@ -1,61 +1,63 @@
-//! Init:
-//! Firstly, driver registers itself, and gets its driver index.
-//! Secondly, driver registers all devices it found, and gets their device indices.
-//! Now, tty layer has all needed infomation.
+//! Init
 //!
-//! Read:
-//! Driver sends data from a device to tty layer with driver index and device index.
-//! Kernel gets data from a device by passing its name to tty layer.  
+//! firstly, a driver registers itself to get its index.
+//! next, the driver registers all devices it found to get their indices.
 //!
-//! Write:
-//! Kernel writes data to a device by passing its name to tty layer.
+//! Read
+//!
+//! when a device receives data, it will cause a irq.
+//! then the driver sends the data to tty layer using their indices.
+//! finally, kernel will get the data using the device's name.  
+//!
+//! Write
+//!
+//! kernel writes data to a device using its name.
 
 #![no_std]
 
 extern crate alloc;
 
 mod buffer;
+mod constant;
 mod driver;
 mod ldisc;
 mod tty;
 
-use alloc::vec;
 use driver::get_driver_by_index;
 
 pub use driver::{register_device, register_driver, TtyDriverOps};
-use spinlock::SpinNoIrq;
 pub use tty::{get_all_device_names, get_device_by_name};
 
-/// called by driver when irq.
-/// send data from hardware.
+/// called by driver when irq, to send data from hardware.
 pub fn tty_receive_buf(driver_index: usize, device_index: usize, buf: &[u8]) {
+    // check the validation of index
     if let Some(driver) = get_driver_by_index(driver_index) {
         if let Some(tty) = driver.get_device_by_index(device_index) {
-            let ldisc = tty.ldisc().clone();
-            ldisc.receive_buf(tty.clone(), buf);
+            tty.ldisc().receive_buf(tty.clone(), buf);
         }
     }
 }
 
-/// kernel reads tty.
+/// called by kernel to read a tty device.
 pub fn tty_read(buf: &mut [u8], dev_name: &str) -> usize {
     if let Some(tty) = get_device_by_name(dev_name) {
-        return tty.ldisc().read(buf);
+        tty.ldisc().read(buf)
+    } else {
+        0
     }
-    0
 }
 
-/// kernel writes tty.
+/// called by kernel to write a tty device.
 pub fn tty_write(buf: &[u8], dev_name: &str) -> usize {
     if let Some(tty) = get_device_by_name(dev_name) {
-        return tty.ldisc().write(tty.clone(), buf);
+        tty.ldisc().write(tty.clone(), buf)
+    } else {
+        0
     }
-    0
 }
 
 /// init
 pub fn init() {
-    driver::ALL_DRIVERS.init_by(SpinNoIrq::new(vec![]));
-    tty::ALL_DEVICES.init_by(SpinNoIrq::new(vec![]));
-    tty::ALL_DEV_NAMES.init_by(SpinNoIrq::new(vec![]));
+    driver::init();
+    tty::init();
 }

@@ -1,7 +1,8 @@
-//! Here document functions for taking care of tty buffer and their flipping.
-//! Drivers are supposed to fill the buffer by one of those functions below
-//! and then flip the buffer, so that the data are passed to line discipline for further processing.
+//! functions for tty buffer.
+//! Drivers should fill the buffer by functions below.
+//! then the data will be passed to line discipline for processing.
 
+/// tty buffer size.
 const TTY_BUF_SIZE: usize = 4096;
 
 /// ring buffer.
@@ -9,30 +10,34 @@ const TTY_BUF_SIZE: usize = 4096;
 struct RingBuffer {
     /// data.
     buf: [u8; TTY_BUF_SIZE],
+
     /// the first element or empty slot if buffer is empty.
     head: usize,
+
     /// the first empty slot.
     tail: usize,
+
     /// number of elements.
     len: usize,
 }
 
-/// characters buffer.
+/// tty buffer.
+/// TODO: use flip buffer.
 #[derive(Debug)]
 pub struct TtyBuffer {
+    /// use ring buffer to save chars.
     buffer: spinlock::SpinNoIrq<RingBuffer>,
 }
 
 impl TtyBuffer {
     pub fn new() -> Self {
-        let buf = RingBuffer {
-            buf: [0u8; TTY_BUF_SIZE],
-            head: 0,
-            tail: 0,
-            len: 0,
-        };
         Self {
-            buffer: spinlock::SpinNoIrq::new(buf),
+            buffer: spinlock::SpinNoIrq::new(RingBuffer {
+                buf: [0u8; TTY_BUF_SIZE],
+                head: 0,
+                tail: 0,
+                len: 0,
+            }),
         }
     }
 
@@ -44,7 +49,7 @@ impl TtyBuffer {
         buf.tail = 0;
     }
 
-    /// get buffer's index'th element.
+    /// get `index`th element without changing buffer.
     pub fn see(&self, index: usize) -> u8 {
         let buf = self.buffer.lock();
         if index < buf.len {
@@ -54,7 +59,7 @@ impl TtyBuffer {
         }
     }
 
-    /// push a charachter
+    /// push a char to tail.
     pub fn push(&self, ch: u8) {
         let mut buf = self.buffer.lock();
         if buf.len != TTY_BUF_SIZE {
@@ -65,20 +70,12 @@ impl TtyBuffer {
         }
     }
 
-    /// delete and return last character.
+    /// delete and return the heading char.
     pub fn pop(&self) -> u8 {
         self.delete(0)
-        // let mut buf = self.buffer.lock();
-        // if buf.len != 0 {
-        //     buf.len -= 1;
-        //     buf.tail = (buf.tail - 1) % TTY_BUF_SIZE;
-        //     buf.buf[buf.tail]
-        // } else {
-        //     0
-        // }
     }
 
-    /// insert char `ch` to buffer's index'th slot.
+    /// insert `ch` to `index`th position.
     pub fn insert(&self, ch: u8, index: usize) {
         let mut buf = self.buffer.lock();
         // if not full and index is right
@@ -98,7 +95,7 @@ impl TtyBuffer {
         }
     }
 
-    /// delete a character in buffer[index].
+    /// delete and return the `index`th element.
     pub fn delete(&self, index: usize) -> u8 {
         let mut buf = self.buffer.lock();
         // if not empty and index is right
@@ -124,15 +121,20 @@ impl TtyBuffer {
         }
     }
 
-    /// get index
+    /// get current length of buffer.
     pub fn len(&self) -> usize {
         self.buffer.lock().len
     }
 }
 
+/// a buffer for echo of line discipline.
+/// additionally saving the cursor position.
 #[derive(Debug)]
 pub struct EchoBuffer {
+    /// chars buffer.
     pub buffer: TtyBuffer,
+
+    /// current column of cursor.
     pub col: usize,
 }
 
@@ -142,20 +144,5 @@ impl EchoBuffer {
             buffer: TtyBuffer::new(),
             col: 0,
         }
-    }
-    pub fn col(&self) -> usize {
-        self.col
-    }
-    pub fn col_sub_one(&mut self) {
-        self.col -= 1;
-    }
-    pub fn col_add_one(&mut self) {
-        self.col += 1;
-    }
-    pub fn col_clear(&mut self) {
-        self.col = 0;
-    }
-    pub fn len(&self) -> usize {
-        self.buffer.len()
     }
 }
