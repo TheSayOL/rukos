@@ -35,44 +35,26 @@ fn console_write_bytes(buf: &[u8]) -> AxResult<usize> {
 struct StdinRaw;
 struct StdoutRaw;
 
+static STDIO_TTY_NAME: lazy_init::LazyInit<alloc::string::String> = lazy_init::LazyInit::new();
+
+fn get_stdio_tty_name() -> &'static str {
+    if !STDIO_TTY_NAME.is_init() {
+        let name = ruxhal::get_all_device_names().get(0).unwrap().clone();
+        STDIO_TTY_NAME.init_by(name);
+    }
+    &STDIO_TTY_NAME
+}
+
 impl Read for StdinRaw {
     // Non-blocking read, returns number of bytes read.
     fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
-        let names = ruxhal::get_all_device_names();
-
-        // read the first tty device
-        if let Some(name) = names.get(0) {
-            return Ok(ruxhal::tty_read(buf, name));
-        };
-
-        Ok(0)
-
-        // let mut read_len = 0;
-        // while read_len < buf.len() {
-        //     if let Some(c) = console_read_bytes() {
-        //         buf[read_len] = c;
-        //         read_len += 1;
-        //     } else {
-        //         break;
-        //     }
-        // }
-        // Ok(read_len)
+        Ok(ruxhal::tty_read(buf, &get_stdio_tty_name()))
     }
 }
 
 impl Write for StdoutRaw {
     fn write(&mut self, buf: &[u8]) -> AxResult<usize> {
-        let mut a = alloc::vec![];
-        for u in buf {
-            a.push(*u as char);
-        }
-        let names = ruxhal::get_all_device_names();
-        let mut len = 0;
-        if let Some(name) = names.get(0) {
-            len = ruxhal::tty_write(buf, name);
-        }
-        Ok(len)
-        // console_write_bytes(buf)
+        Ok(ruxhal::tty_write(buf, &get_stdio_tty_name()))
     }
 
     fn flush(&mut self) -> AxResult {
