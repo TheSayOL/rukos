@@ -41,14 +41,6 @@ impl TtyBuffer {
         }
     }
 
-    /// flush buffer.
-    pub fn flush(&self) {
-        let mut buf = self.buffer.lock();
-        buf.len = 0;
-        buf.head = 0;
-        buf.tail = 0;
-    }
-
     /// get `index`th element without changing buffer.
     pub fn see(&self, index: usize) -> u8 {
         let buf = self.buffer.lock();
