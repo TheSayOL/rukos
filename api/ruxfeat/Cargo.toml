@@ -71,7 +71,7 @@ log-level-info = ["axlog/log-level-info"]
 log-level-debug = ["axlog/log-level-debug"]
 log-level-trace = ["axlog/log-level-trace"]
 
-tty=["ruxhal/tty", "ruxruntime/tty"]
+tty=["ruxhal/tty", "ruxruntime/tty", "alloc", "irq"]
 
 [dependencies]
 ruxruntime = { path = "../../modules/ruxruntime" }
