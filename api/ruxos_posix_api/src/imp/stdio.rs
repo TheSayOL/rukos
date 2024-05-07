@@ -35,12 +35,20 @@ use {
 struct StdinRaw;
 struct StdoutRaw;
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+#[cfg(feature = "alloc")]
 static STDIO_TTY_NAME: lazy_init::LazyInit<alloc::string::String> = lazy_init::LazyInit::new();
+#[cfg(not(feature = "alloc"))]
+static STDIO_TTY_NAME: &str = "notty";
 
 fn get_stdio_tty_name() -> &'static str {
-    if !STDIO_TTY_NAME.is_init() {
-        let name = ruxhal::get_all_device_names().first().unwrap().clone();
-        STDIO_TTY_NAME.init_by(name);
+    #[cfg(feature = "alloc")]
+    {
+        if !STDIO_TTY_NAME.is_init() {
+            let name = ruxhal::get_all_device_names().first().unwrap().clone();
+            STDIO_TTY_NAME.init_by(name);
+        }
     }
     &STDIO_TTY_NAME
 }
