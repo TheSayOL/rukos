@@ -192,6 +192,9 @@ pub fn syscall(syscall_id: SyscallId, args: [usize; 6]) -> isize {
             SyscallId::GETTID => ruxos_posix_api::sys_gettid() as _,
             #[cfg(feature = "fs")]
             SyscallId::FDATASYNC => ruxos_posix_api::sys_fdatasync(args[0] as c_int) as _,
+            SyscallId::TIMERFD_CREATE => {
+                ruxos_posix_api::sys_timerfd_create(args[0] as _, args[1] as _) as _
+            }
             SyscallId::CAP_GET => ruxos_posix_api::sys_cap_get(args[0], args[1]) as _,
             #[allow(unreachable_code)]
             #[cfg(not(feature = "multitask"))]
@@ -224,9 +227,15 @@ pub fn syscall(syscall_id: SyscallId, args: [usize; 6]) -> isize {
                 args[0] as ctypes::clockid_t,
                 args[1] as *mut ctypes::timespec,
             ) as _,
+            SyscallId::CLOCK_GETRES => {
+                ruxos_posix_api::sys_clock_getres(args[0] as _, args[1] as _) as _
+            }
+            // SyscallId::SCHED_GETAFFINITY => {},
             SyscallId::SCHED_YIELD => ruxos_posix_api::sys_sched_yield() as _,
             #[cfg(feature = "signal")]
             SyscallId::KILL => ruxos_posix_api::sys_kill(args[0] as pid_t, args[1] as c_int) as _,
+            #[cfg(feature = "signal")]
+            SyscallId::TKILL => ruxos_posix_api::sys_tkill(args[0] as _, args[1] as _) as _,
             #[cfg(feature = "signal")]
             SyscallId::SIGALTSTACK => ruxos_posix_api::sys_sigaltstack(
                 args[0] as *const core::ffi::c_void,
@@ -275,6 +284,13 @@ pub fn syscall(syscall_id: SyscallId, args: [usize; 6]) -> isize {
                 ruxos_posix_api::sys_socket(args[0] as c_int, args[1] as c_int, args[2] as c_int)
                     as _
             }
+            #[cfg(feature = "net")]
+            SyscallId::SOCKETPAIR => ruxos_posix_api::sys_socketpair(
+                args[0] as c_int,
+                args[1] as c_int,
+                args[2] as c_int,
+                args[3] as _,
+            ) as _,
             #[cfg(feature = "net")]
             SyscallId::BIND => ruxos_posix_api::sys_bind(
                 args[0] as c_int,

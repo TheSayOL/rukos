@@ -71,6 +71,7 @@ pub enum SyscallId {
     FSYNC = 82,
     #[cfg(feature = "fs")]
     FDATASYNC = 83,
+    TIMERFD_CREATE = 85,
     CAP_GET = 90,
     EXIT = 93,
     #[cfg(feature = "multitask")]
@@ -80,9 +81,13 @@ pub enum SyscallId {
     NANO_SLEEP = 101,
     CLOCK_SETTIME = 112,
     CLOCK_GETTIME = 113,
+    CLOCK_GETRES = 114,
+    // SCHED_GETAFFINITY = 123,
     SCHED_YIELD = 124,
     #[cfg(feature = "signal")]
     KILL = 129,
+    #[cfg(feature = "signal")]
+    TKILL = 130,
     #[cfg(feature = "signal")]
     SIGALTSTACK = 132,
     #[cfg(feature = "signal")]
@@ -109,6 +114,8 @@ pub enum SyscallId {
     SYSINFO = 179,
     #[cfg(feature = "net")]
     SOCKET = 198,
+    #[cfg(feature = "net")]
+    SOCKETPAIR = 199,
     #[cfg(feature = "net")]
     BIND = 200,
     #[cfg(feature = "net")]
