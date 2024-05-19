@@ -91,3 +91,9 @@ pub unsafe fn sys_kill(pid: pid_t, sig: c_int) -> c_int {
     debug!("sys_kill <= pid {} sig {}", pid, sig);
     syscall_body!(sys_kill, Ok(0))
 }
+
+/// TODO: send a signal to a thread
+pub unsafe fn sys_tkill(tid: pid_t, sig: c_int) -> c_int {
+    debug!("sys_tkill <= tid {} sig {}", tid, sig);
+    syscall_body!(sys_kill, Ok(0))
+}
