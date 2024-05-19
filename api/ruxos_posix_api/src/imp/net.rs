@@ -19,8 +19,8 @@ use axnet::{TcpSocket, UdpSocket};
 use axsync::Mutex;
 
 use super::fd_ops::FileLike;
-use crate::ctypes;
 use crate::utils::char_ptr_to_str;
+use crate::{ctypes, sys_write};
 
 pub enum Socket {
     Udp(Mutex<UdpSocket>),
@@ -122,6 +122,8 @@ impl UnixSocket {
     pub fn connect(&self, addr: SocketAddr) -> LinuxResult {
         let addr: SockaddrUn = addr.into();
         let fd = addr.sun_path[0];
+        self.peer_fd
+            .store(fd as _, core::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 
@@ -836,7 +838,7 @@ pub fn sys_socketpair(domain: c_int, socktype: c_int, protocol: c_int, sv: usize
 
         // connect sockets
         socket1.connect(socket2.local_addr()?)?;
-        socket2.accept()?;
+        socket2.connect(socket1.local_addr()?)?;
 
         // return
         sv[0] = fd1;
