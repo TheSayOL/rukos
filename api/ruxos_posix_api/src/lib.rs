@@ -59,7 +59,8 @@ pub use imp::sys::{sys_sysinfo, sys_uname};
 pub use imp::sys_invalid;
 pub use imp::task::{sys_exit, sys_getpid, sys_getppid, sys_gettid, sys_sched_yield};
 pub use imp::time::{
-    sys_clock_gettime, sys_clock_settime, sys_gettimeofday, sys_nanosleep, sys_times,
+    sys_clock_getres, sys_clock_gettime, sys_clock_settime, sys_gettimeofday, sys_nanosleep,
+    sys_timerfd_create, sys_times,
 };
 
 #[cfg(all(feature = "fd", feature = "musl"))]
@@ -87,7 +88,7 @@ pub use imp::mmap::{sys_madvise, sys_mmap, sys_mprotect, sys_mremap, sys_msync, 
 pub use imp::net::{
     sys_accept, sys_bind, sys_connect, sys_freeaddrinfo, sys_getaddrinfo, sys_getpeername,
     sys_getsockname, sys_listen, sys_recv, sys_recvfrom, sys_send, sys_sendmsg, sys_sendto,
-    sys_setsockopt, sys_shutdown, sys_socket,
+    sys_setsockopt, sys_shutdown, sys_socket, sys_socketpair,
 };
 #[cfg(feature = "pipe")]
 pub use imp::pipe::{sys_pipe, sys_pipe2};
@@ -107,7 +108,9 @@ pub use imp::pthread::{
     sys_pthread_setspecific,
 };
 #[cfg(feature = "signal")]
-pub use imp::signal::{sys_getitimer, sys_kill, sys_setitimer, sys_sigaction, sys_sigaltstack};
+pub use imp::signal::{
+    sys_getitimer, sys_kill, sys_setitimer, sys_sigaction, sys_sigaltstack, sys_tkill,
+};
 
 #[cfg(feature = "multitask")]
 pub use imp::pthread::futex::sys_futex;
