@@ -8,11 +8,16 @@
  */
 
 use core::ffi::{c_int, c_long};
+use core::sync::atomic::AtomicBool;
 use core::time::Duration;
 
 use crate::ctypes;
+use crate::imp::fd_ops::add_file_like;
 
+use alloc::sync::Arc;
 use axerrno::LinuxError;
+
+use super::fd_ops::FileLike;
 
 impl From<ctypes::timespec> for Duration {
     fn from(ts: ctypes::timespec) -> Self {
@@ -74,6 +79,11 @@ pub unsafe fn sys_clock_settime(_clk: ctypes::clockid_t, ts: *const ctypes::time
     })
 }
 
+/// Get clock time since booting
+pub fn sys_clock_getres(_clk: ctypes::clockid_t, res: *mut ctypes::timespec) -> c_int {
+    syscall_body!(sys_clock_getres, Ok(0))
+}
+
 /// Sleep some nanoseconds
 ///
 /// TODO: should be woken by signals, and set errno
@@ -119,4 +129,67 @@ pub unsafe fn sys_gettimeofday(ts: *mut ctypes::timespec, flags: c_int) -> c_int
 /// TODO: get process and waited-for child process times
 pub unsafe fn sys_times(_buf: *mut usize) -> c_int {
     syscall_body!(sys_times, Ok(0))
+}
+
+struct TimerFile {
+    non_blocking: AtomicBool,
+}
+
+impl TimerFile {
+    fn new() -> Self {
+        Self {
+            non_blocking: AtomicBool::new(false),
+        }
+    }
+}
+
+impl FileLike for TimerFile {
+    fn into_any(
+        self: alloc::sync::Arc<Self>,
+    ) -> alloc::sync::Arc<dyn core::any::Any + Send + Sync> {
+        self
+    }
+    fn poll(&self) -> axerrno::LinuxResult<axio::PollState> {
+        let ret = axio::PollState {
+            readable: true,
+            writable: true,
+        };
+        Ok(ret)
+    }
+    fn read(&self, buf: &mut [u8]) -> axerrno::LinuxResult<usize> {
+        // buf should be u64 at least.
+        if buf.len() < 8 {
+            return axerrno::LinuxResult::Err(LinuxError::EINVAL);
+        }
+        // always expired 1 time.
+        let ptr = buf.as_mut_ptr() as *mut u64;
+        unsafe {
+            *ptr = 1;
+        }
+        Ok(8)
+    }
+    fn set_nonblocking(&self, nonblocking: bool) -> axerrno::LinuxResult {
+        self.non_blocking
+            .store(nonblocking, core::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+    fn stat(&self) -> axerrno::LinuxResult<ctypes::stat> {
+        Err(LinuxError::EINVAL)
+    }
+    fn write(&self, buf: &[u8]) -> axerrno::LinuxResult<usize> {
+        Ok(0)
+    }
+}
+
+/// create a timer notifying by fd.
+///
+/// return fd.
+pub fn sys_timerfd_create(clockid: c_int, flags: c_int) -> c_int {
+    syscall_body!(sys_timerfd_create, {
+        let timer = TimerFile::new();
+        let fd = add_file_like(Arc::new(timer))?;
+
+        error!("sys_timerfd_create: clockid is {clockid}, flags is {flags}");
+        Ok(fd)
+    })
 }
