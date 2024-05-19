@@ -17,6 +17,7 @@
 #![feature(doc_auto_cfg)]
 #![allow(clippy::missing_safety_doc)]
 #![cfg_attr(feature = "alloc", feature(btree_cursors))]
+#![feature(ip_bits)]
 
 #[macro_use]
 extern crate axlog;
