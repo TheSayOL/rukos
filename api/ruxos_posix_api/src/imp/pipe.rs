@@ -8,7 +8,7 @@
  */
 
 use alloc::sync::Arc;
-use core::ffi::c_int;
+use core::{ffi::c_int, sync::atomic::AtomicBool};
 
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
@@ -84,6 +84,7 @@ impl PipeRingBuffer {
 }
 
 pub struct Pipe {
+    nonblocking: AtomicBool,
     readable: bool,
     buffer: Arc<Mutex<PipeRingBuffer>>,
 }
@@ -92,10 +93,12 @@ impl Pipe {
     pub fn new() -> (Pipe, Pipe) {
         let buffer = Arc::new(Mutex::new(PipeRingBuffer::new()));
         let read_end = Pipe {
+            nonblocking: AtomicBool::new(false),
             readable: true,
             buffer: buffer.clone(),
         };
         let write_end = Pipe {
+            nonblocking: AtomicBool::new(false),
             readable: false,
             buffer,
         };
@@ -130,6 +133,10 @@ impl FileLike for Pipe {
             let loop_read = ring_buffer.available_read();
             // If there is no data
             if loop_read == 0 {
+                // if nonblocking , just return
+                if self.nonblocking.load(core::sync::atomic::Ordering::Relaxed) {
+                    return Ok(0);
+                }
                 if self.write_end_close() {
                     // write end is closed, read 0 bytes.
                     return Ok(0);
@@ -207,6 +214,8 @@ impl FileLike for Pipe {
     }
 
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
+        self.nonblocking
+            .store(_nonblocking, core::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 }
@@ -229,6 +238,8 @@ pub fn sys_pipe(fds: &mut [c_int]) -> c_int {
 
         fds[0] = read_fd as c_int;
         fds[1] = write_fd as c_int;
+
+        debug!("sys_pipe: fds {fds:?}");
 
         Ok(0)
     })
